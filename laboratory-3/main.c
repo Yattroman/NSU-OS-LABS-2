@@ -9,10 +9,12 @@
 #define STRINGS_NUMBER 3
 #define MAX_STRING_LENGTH 100
 
-char** initStringsForPrinting(char ** strings, int threadNumber){
-    strings[THREADS_NUMBER][MAX_STRING_LENGTH];
-    for (int i = 0; i < THREADS_NUMBER; ++i) {
-        strings[i] = strncat("I'm strings printed by thread N", (const char *) threadNumber, 1);
+char** fillStringsForPrinting(char** strings, int threadNumber){
+    const char numbers[] = {'1', '2', '3', '4'};
+
+    for (char i = 0; i < THREADS_NUMBER; ++i) {
+        memset(strings[i], '\0', sizeof(char)*MAX_STRING_LENGTH);
+        strcpy(strings[i], strcat("I'm strings printed by thread N", &numbers[threadNumber]));
     }
 
     return strings;
@@ -21,21 +23,25 @@ char** initStringsForPrinting(char ** strings, int threadNumber){
 void * writeStrings(void* arg){
     char** stringsForPrint = (char**) arg;
 
-    printf("Children text: %s\n", arg);
+    for (int i = 0; i < THREADS_NUMBER; ++i) {
+        printf("Children text: %s\n", stringsForPrint[i]);
+    }
 
     return NULL;
 }
 
 int main() {
-    thread_t tid[THREADS_NUMBER];
+    pthread_t tid[THREADS_NUMBER];
     int executionStatus;
 
-    for (int i = 0; i < THREADS_NUMBER; ++i) {
+    char strings[THREADS_NUMBER][MAX_STRING_LENGTH];
 
+    for (int i = 0; i < THREADS_NUMBER; ++i) {
+        printf(strings)
     }
 
-    for (int i = 0; i < THREADS_NUMBER; ++i) {
-        executionStatus = pthread_create(&tid[i], NULL, writeStrings, (void*) i);
+    /*for (int i = 0; i < THREADS_NUMBER; ++i) {
+        executionStatus = pthread_create(&tid[i], NULL, writeStrings, (void*) getStringsForPrinting( (char **) strings, i));
 
         if(executionStatus != 0){
             perror("There are problems with creating thread.");
@@ -50,7 +56,7 @@ int main() {
             perror("There are problems with joining thread.");
             exit(EXIT_FAILURE);
         }
-    }
+    }*/
 
     return EXIT_SUCCESS;
 }

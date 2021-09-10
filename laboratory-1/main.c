@@ -6,11 +6,12 @@
 
 #define THREADS_NUMBER 2
 #define STRINGS_NUMBER 10
+#define STATUS_SUCCES 0
 
 void * writeStrings(void* arg){
     int strNumber = (int) arg;
 
-    for (int i = 1; i <= strNumber; ++i) {
+    for (int i = 1; i <= STRINGS_NUMBER; ++i) {
         printf("Children text: %d\n", i);
     }
 
@@ -18,10 +19,10 @@ void * writeStrings(void* arg){
 }
 
 int main() {
-    thread_t tid[THREADS_NUMBER];
-    int executionStatus = pthread_create(&tid[0], NULL, writeStrings, (void*) STRINGS_NUMBER);
+    pthread_t tid[THREADS_NUMBER];
+    int executionStatus = pthread_create(&tid[0], NULL, writeStrings, NULL);
 
-    if(executionStatus != 0){
+    if(executionStatus != STATUS_SUCCES){
         perror("There are problems with creating thread.");
         exit(EXIT_FAILURE);
     }
