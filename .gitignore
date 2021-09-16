@@ -1,3 +1,4 @@
 # Project exclude paths
 /cmake-build-debug-remote/
-CMakeLists.txt
+/CMakeLists.txt
+./.idea
