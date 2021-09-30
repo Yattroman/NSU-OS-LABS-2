@@ -64,8 +64,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    sleep(10);
-
     for (int i = 0; i < threadsNumber ; ++i) {
         void * piPart;
         executionStatus = pthread_join(tid[i], &piPart);
