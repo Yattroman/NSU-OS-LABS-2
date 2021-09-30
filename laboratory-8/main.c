@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
             char buffer[256];
             strerror_r(executionStatus, buffer, sizeof(buffer));
             fprintf(stderr,"There are problems with creating thread. Certainly: %s", buffer);
-            exit(EXIT_FAILURE);
+            pthread_exit(EXIT_FAILURE);
         }
     }
 
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
             char buffer[256];
             strerror_r(executionStatus, buffer, sizeof(buffer));
             fprintf(stderr,"There are problems with joining thread.. Certainly: %s", buffer);
-            exit(EXIT_FAILURE);
+            pthread_exit(EXIT_FAILURE);
         }
 
         pi = pi + *((double*) piPart);
@@ -82,6 +82,6 @@ int main(int argc, char** argv) {
 
     pi = pi * 4.0;
     printf("pi done: %.15g \n", pi);
-    return (EXIT_SUCCESS);
+    pthread_exit(EXIT_SUCCESS);
 }
 
