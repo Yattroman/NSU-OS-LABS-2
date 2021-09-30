@@ -9,6 +9,9 @@
 #define STATUS_SUCCESS 0
 #define STDOUT 0
 
+pthread_mutex_t exit_mutex;
+#define EXIT(status) do { pthread_mutex_lock(&exit_mutex); exit(status); } while(0)
+
 void * writeStrings(void* arg){
 
     const char * childMessage = {"Children text.\n"};
@@ -22,6 +25,7 @@ void * writeStrings(void* arg){
 }
 
 int main() {
+    pthread_mutex_init(&exit_mutex, NULL);
     pthread_t tid[THREADS_NUMBER];
     int executionStatus = pthread_create(&tid[0], NULL, writeStrings, NULL);
 
@@ -29,7 +33,7 @@ int main() {
         char buffer[256];
         strerror_r(executionStatus, buffer, sizeof(buffer));
         fprintf(stderr,"There are problems with creating thread. Certainly: %s", buffer);
-        exit(EXIT_FAILURE);
+        EXIT(EXIT_FAILURE);
     }
 
     const char * parentMessage = {"Parent text.\n"};
@@ -39,5 +43,5 @@ int main() {
 //        printf("Parent text: %d\n", i);
     }
 
-    return EXIT_SUCCESS;
+    pthread_exit(EXIT_SUCCESS);
 }

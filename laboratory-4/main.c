@@ -27,7 +27,7 @@ int main() {
         char buffer[256];
         strerror_r(executionStatus, buffer, sizeof(buffer));
         fprintf(stderr,"There are problems with creating thread. Certainly: %s", buffer);
-        exit(EXIT_FAILURE);
+        pthread_exit(NULL);
     }
 
     sleep(SLEEP_TIME_SEC);
@@ -38,8 +38,8 @@ int main() {
         char buffer[256];
         strerror_r(executionStatus, buffer, sizeof(buffer));
         fprintf(stderr,"There are problems with canceling thread. Certainly: %s", buffer);
-        exit(EXIT_FAILURE);
+        pthread_exit(NULL);
     }
 
-    return EXIT_SUCCESS;
+    pthread_exit(EXIT_SUCCESS);
 }

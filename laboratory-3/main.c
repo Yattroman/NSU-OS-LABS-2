@@ -32,16 +32,18 @@ int main() {
             char buffer[256];
             strerror_r(executionStatus, buffer, sizeof(buffer));
             fprintf(stderr, "There are problems with creating thread. Certainly: %s", buffer);
-            exit(EXIT_FAILURE);
+            pthread_exit(NULL);
         }
 
         executionStatus = pthread_join(tid[i], NULL);
 
         if(executionStatus != 0){
-            perror("There are problems with joining thread.");
-            exit(EXIT_FAILURE);
+            char buffer[256];
+            strerror_r(executionStatus, buffer, sizeof(buffer));
+            fprintf(stderr, "There are problems with joining thread.. Certainly: %s", buffer);
+            pthread_exit(NULL);
         }
     }
 
-    return EXIT_SUCCESS;
+    pthread_exit(EXIT_SUCCESS);
 }
