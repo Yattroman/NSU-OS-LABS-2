@@ -41,5 +41,13 @@ int main() {
         pthread_exit(NULL);
     }
 
+    executionStatus = pthread_cancel(tid[0]);
+
+    if (executionStatus == PTHREAD_CANCELED) {
+        printf("Thread was cancelled\n");
+    } else {
+        printf("Thread was joined normally\n");
+    }
+
     pthread_exit(EXIT_SUCCESS);
 }

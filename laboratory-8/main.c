@@ -4,14 +4,24 @@
 #include <string.h>
 #include <unistd.h>
 
-//#define STEPS_NUMBER 200000000
 #define STEPS_NUMBER 200000
 #define STATUS_SUCCESS 0
+#define BUFFER_DEF_LENGTH 256
+
+char errorBuffer[BUFFER_DEF_LENGTH];
 
 typedef struct compInfo {
     int start;
     int end;
 } compInfo;
+
+void verifyPthreadFunctions(int returnCode, const char* functionName){
+    strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
+    if(returnCode < 0){
+        fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
+        pthread_exit(NULL);
+    }
+}
 
 void * getResultsPart(void * args){
     compInfo * info = (compInfo*) args;
@@ -20,6 +30,12 @@ void * getResultsPart(void * args){
     int end = info->end;
 
     double * localPi = (double*) malloc(sizeof(double));
+
+    if(localPi == NULL){
+        fprintf(stderr,"There are problems with allocating memory.");
+        pthread_exit(NULL);
+    }
+
     *localPi = 0;
 
     for (int i = start; i < end ; ++i) {
@@ -40,43 +56,29 @@ int main(int argc, char** argv) {
     }
 
     long threadsNumber = atol(argv[1]);
+
+    if(threadsNumber < 1){
+        fprintf(stderr, "Invalid threads number. Minimal number: 1. Try again.");
+        pthread_exit(NULL);
+    }
+
     pthread_t tid[threadsNumber];
 
     double pi = 0;
-    int executionStatus;
     int workWeight = STEPS_NUMBER/threadsNumber;
     printf("WorkWeight: %d", workWeight);
 
     for (int i = 0; i < threadsNumber ; ++i) {
-
         compInfo * info = (compInfo*) malloc(sizeof(compInfo));
-
         info->start = i*workWeight;
         info->end = (i+1)*workWeight - 1;
-
-        executionStatus = pthread_create(&tid[i], NULL, getResultsPart, (void*) info);
-
-        if(executionStatus != STATUS_SUCCESS){
-            char buffer[256];
-            strerror_r(executionStatus, buffer, sizeof(buffer));
-            fprintf(stderr,"There are problems with creating thread. Certainly: %s", buffer);
-            pthread_exit(EXIT_FAILURE);
-        }
+        verifyPthreadFunctions(pthread_create(&tid[i], NULL, getResultsPart, (void*) info), "pthread_create");
     }
 
     for (int i = 0; i < threadsNumber ; ++i) {
         void * piPart;
-        executionStatus = pthread_join(tid[i], &piPart);
-
-        if(executionStatus != STATUS_SUCCESS){
-            char buffer[256];
-            strerror_r(executionStatus, buffer, sizeof(buffer));
-            fprintf(stderr,"There are problems with joining thread.. Certainly: %s", buffer);
-            pthread_exit(EXIT_FAILURE);
-        }
-
+        verifyPthreadFunctions(pthread_join(tid[i], &piPart), "pthread_join");
         pi = pi + *((double*) piPart);
-
         free(piPart);
     }
 
