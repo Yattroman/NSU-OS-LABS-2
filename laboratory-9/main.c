@@ -23,40 +23,49 @@ int executionStatus = ENABLED;
 int latestIteration = 0;
 
 typedef struct compInfo {
-    double* localSumm;
-    int* rank;
+    double *localSumm;
+    int *rank;
     int threadsNumber;
 } compInfo;
 
-void verifyPthreadFunctions(int returnCode, const char* functionName){
+void verifyPthreadFunctions(int returnCode, const char *functionName) {
     strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
-    if(returnCode < STATUS_SUCCESS){
+    if (returnCode < STATUS_SUCCESS) {
         fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
         pthread_exit(NULL);
     }
 }
 
-void * getResultsPart(void * args){
-    compInfo * info = (compInfo*) args;
+void *getResultsPart(void *args) {
+    compInfo *info = (compInfo *) args;
     int currentIteration = 0;
 
-    while(TRUE){
-        for (int i = currentIteration * ITERATION_VOLUME + *info->rank; i < (currentIteration+1) * ITERATION_VOLUME; i += info->threadsNumber) {
-            *info->localSumm += ((i % 2 == 0) ? (1.0) : (-1.0)) / (2.0 * i + 1.0);
+    double piLocal = 0;
+    int rank = *info->rank;
+    int threadsNumber = info->threadsNumber;
+
+    while (TRUE) {
+        for (int i = currentIteration * ITERATION_VOLUME + rank;
+             i < (currentIteration + 1) * ITERATION_VOLUME; i += threadsNumber) {
+            piLocal += ((i % 2 == 0) ? (1.0) : (-1.0)) / (2.0 * i + 1.0);
         }
+        *info->localSumm = piLocal;
+
         verifyPthreadFunctions(pthread_barrier_wait(&barrier), "pthread_barrier_wait");
 
         verifyPthreadFunctions(pthread_mutex_lock(&mutex), "pthread_mutex_lock");
-        if(executionStatus == 0 && currentIteration == latestIteration){
+
+        if (executionStatus == 0 && currentIteration == latestIteration) {
             printf("%d ", currentIteration);
             verifyPthreadFunctions(pthread_mutex_unlock(&mutex), "pthread_mutex_unlock");
             break;
         } else {
             currentIteration++;
-            if(latestIteration < currentIteration){
+            if (latestIteration < currentIteration) {
                 latestIteration = currentIteration;
             }
         }
+
         verifyPthreadFunctions(pthread_mutex_unlock(&mutex), "pthread_mutex_unlock");
     }
 
@@ -67,49 +76,59 @@ void stopExecution() {
     executionStatus = DISABLED;
 }
 
-double getCalculatedPi(int threadsNumber){
+void freeResources(double *lSumms, int *rank, struct compInfo *info){
+    free(lSumms);
+    free(rank);
+    free(info);
+    verifyPthreadFunctions(pthread_barrier_destroy(&barrier), "pthread_barrier_destroy");
+    verifyPthreadFunctions(pthread_mutex_destroy(&mutex), "pthread_mutex_destroy");
+}
+
+double getCalculatedPi(int threadsNumber) {
     pthread_t tid[threadsNumber];
     double pi = 0;
 
-    double * lSumms = (double*) malloc(sizeof(double)*threadsNumber);
-    int * rank = (int*) malloc(sizeof(int)*threadsNumber);
-    compInfo * info = (compInfo*) malloc(sizeof(compInfo)*threadsNumber);
+    double *lSumms = (double *) malloc(sizeof(double) * threadsNumber);
+    int *rank = (int *) malloc(sizeof(int) * threadsNumber);
+    compInfo *info = (compInfo *) malloc(sizeof(compInfo) * threadsNumber);
 
-    if(info == NULL || lSumms == NULL || rank == NULL){
+    if (info == NULL || lSumms == NULL || rank == NULL) {
         perror("There are problems with allocating memory");
         pthread_exit(NULL);
     }
 
-    for (int i = 0; i < threadsNumber ; ++i) {
+    for (int i = 0; i < threadsNumber; ++i) {
         lSumms[i] = 0.0;
 
         info->localSumm = &lSumms[i];
         info->rank = &rank[i];
         info->threadsNumber = threadsNumber;
 
-        verifyPthreadFunctions(pthread_create(&tid[i], NULL, getResultsPart, (void*) info), "pthread_create");
+        verifyPthreadFunctions(pthread_create(&tid[i], NULL, getResultsPart, (void *) info), "pthread_create");
     }
 
-    for (int i = 0; i < threadsNumber ; ++i) {
+    for (int i = 0; i < threadsNumber; ++i) {
         verifyPthreadFunctions(pthread_join(tid[i], NULL), "pthread_join");
         pi += lSumms[i];
     }
 
     pi *= 4.0;
 
+    freeResources(lSumms, rank, info);
+
     return pi;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
 
-    if(argc < MINIMAL_REQUIRED_ARGS){
+    if (argc < MINIMAL_REQUIRED_ARGS) {
         fprintf(stderr, "Not enough arguments entered.\nusage: <progname> <threads_number>\n");
         pthread_exit(NULL);
     }
 
     long threadsNumber = atol(argv[1]);
 
-    if(threadsNumber < MINIMAL_REQUIRED_THREADS){
+    if (threadsNumber < MINIMAL_REQUIRED_THREADS) {
         fprintf(stderr, "Invalid threads number. Minimal number: 1. Try again.");
         pthread_exit(NULL);
     }
@@ -121,9 +140,6 @@ int main(int argc, char** argv) {
 
     double pi = getCalculatedPi(threadsNumber);
     printf("pi done: %.15g \n", pi);
-
-    verifyPthreadFunctions(pthread_barrier_destroy(&barrier), "pthread_barrier_destroy");
-    verifyPthreadFunctions(pthread_mutex_destroy(&mutex), "pthread_mutex_destroy");
 
     pthread_exit(EXIT_SUCCESS);
 }
