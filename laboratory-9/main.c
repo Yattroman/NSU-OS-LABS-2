@@ -23,8 +23,8 @@ int executionStatus = ENABLED;
 int latestIteration = 0;
 
 typedef struct compInfo {
-    double *localSumm;
-    int *rank;
+    double * lSumms;
+    int rank;
     int threadsNumber;
 } compInfo;
 
@@ -41,7 +41,8 @@ void *getResultsPart(void *args) {
     int currentIteration = 0;
 
     double piLocal = 0;
-    int rank = *info->rank;
+
+    int rank = info->rank;
     int threadsNumber = info->threadsNumber;
 
     while (TRUE) {
@@ -49,9 +50,11 @@ void *getResultsPart(void *args) {
              i < (currentIteration + 1) * ITERATION_VOLUME; i += threadsNumber) {
             piLocal += ((i % 2 == 0) ? (1.0) : (-1.0)) / (2.0 * i + 1.0);
         }
-        *info->localSumm = piLocal;
 
-        verifyPthreadFunctions(pthread_barrier_wait(&barrier), "pthread_barrier_wait");
+        info->lSumms[rank] = piLocal;
+
+//        verifyPthreadFunctions(pthread_barrier_wait(&barrier), "pthread_barrier_wait");
+        pthread_barrier_wait(&barrier);
 
         verifyPthreadFunctions(pthread_mutex_lock(&mutex), "pthread_mutex_lock");
 
@@ -76,9 +79,8 @@ void stopExecution() {
     executionStatus = DISABLED;
 }
 
-void freeResources(double *lSumms, int *rank, struct compInfo *info){
+void freeResources(double *lSumms, struct compInfo *info){
     free(lSumms);
-    free(rank);
     free(info);
     verifyPthreadFunctions(pthread_barrier_destroy(&barrier), "pthread_barrier_destroy");
     verifyPthreadFunctions(pthread_mutex_destroy(&mutex), "pthread_mutex_destroy");
@@ -89,10 +91,9 @@ double getCalculatedPi(int threadsNumber) {
     double pi = 0;
 
     double *lSumms = (double *) malloc(sizeof(double) * threadsNumber);
-    int *rank = (int *) malloc(sizeof(int) * threadsNumber);
     compInfo *info = (compInfo *) malloc(sizeof(compInfo) * threadsNumber);
 
-    if (info == NULL || lSumms == NULL || rank == NULL) {
+    if (info == NULL || lSumms == NULL) {
         perror("There are problems with allocating memory");
         pthread_exit(NULL);
     }
@@ -100,8 +101,8 @@ double getCalculatedPi(int threadsNumber) {
     for (int i = 0; i < threadsNumber; ++i) {
         lSumms[i] = 0.0;
 
-        info->localSumm = &lSumms[i];
-        info->rank = &rank[i];
+        info->lSumms = lSumms;
+        info->rank = i;
         info->threadsNumber = threadsNumber;
 
         verifyPthreadFunctions(pthread_create(&tid[i], NULL, getResultsPart, (void *) info), "pthread_create");
@@ -114,7 +115,7 @@ double getCalculatedPi(int threadsNumber) {
 
     pi *= 4.0;
 
-    freeResources(lSumms, rank, info);
+    freeResources(lSumms, info);
 
     return pi;
 }
