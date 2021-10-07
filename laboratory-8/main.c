@@ -26,26 +26,32 @@ void verifyPthreadFunctions(int returnCode, const char* functionName){
 void * getResultsPart(void * args){
     compInfo * info = (compInfo*) args;
 
+    if(args == NULL){
+        fprintf(stderr,"There are problems with arguments.");
+        pthread_exit(NULL);
+    }
+
     int start = info->start;
     int end = info->end;
+    double localPi = 0;
 
-    double * localPi = (double*) malloc(sizeof(double));
+    for (int i = start; i < end ; ++i) {
+        localPi += 1.0/(i*4.0 + 1.0);
+        localPi -= 1.0/(i*4.0 + 3.0);
+    }
 
-    if(localPi == NULL){
+    double * resultedLocalPi = (double*) malloc(sizeof(double));
+
+    if(resultedLocalPi == NULL){
         fprintf(stderr,"There are problems with allocating memory.");
         pthread_exit(NULL);
     }
 
-    *localPi = 0;
-
-    for (int i = start; i < end ; ++i) {
-        *localPi += 1.0/(i*4.0 + 1.0);
-        *localPi -= 1.0/(i*4.0 + 3.0);
-    }
+    *resultedLocalPi = localPi;
 
     free(info);
 
-    return localPi;
+    return resultedLocalPi;
 }
 
 int main(int argc, char** argv) {

@@ -37,7 +37,7 @@ void verifyPthreadFunctions(int returnCode, const char *functionName) {
 }
 
 void *getResultsPart(void *args) {
-    compInfo *info = (compInfo *) args;
+    compInfo * info = (compInfo *) args;
     int currentIteration = 0;
 
     double piLocal = 0;

@@ -23,23 +23,17 @@ void * philosopher (void *args) {
     printf ("Philosopher %d sitting down to dinner.\n", id);
     
     int rightFork = id;
-    int leftFork = id + 1 % PHILOSOPHERS_NUMBER;
+    int leftFork = (id+1) % PHILOSOPHERS_NUMBER;
     int currentFoodNumber = foodOnTable();
 
     while (currentFoodNumber > 0) {
-
-        /* Thanks to philosophers #1 who would like to
-         * take a nap before picking up the forks, the other
-         * philosophers may be able to eat their dishes and
-         * not deadlock.
-         */
-        
         if (id == 1)
             sleep (sleepSeconds);
 
         printf("Philosopher %d: get dish %d.\n", id, currentFoodNumber);
-        getFork(id, rightFork, "right");
+
         getFork(id, leftFork, "left ");
+        getFork(id, rightFork, "right");
 
         printf("Philosopher %d: eating.\n", id);
 
@@ -50,6 +44,7 @@ void * philosopher (void *args) {
         currentFoodNumber = foodOnTable();
     }
     printf ("Philosopher %d is done eating.\n", id);
+
     return (NULL);
 }
 
@@ -84,14 +79,14 @@ int main (int argn, char **argv) {
     }
 
     sleepSeconds = atoi(argv[1]);
-
     pthread_mutex_init (&foodlock, NULL);
+
     for (int i = 0; i < PHILOSOPHERS_NUMBER; i++)
-        pthread_mutex_init (&forks[i], NULL);
+        pthread_mutex_init(&forks[i], NULL);
     for (int i = 0; i < PHILOSOPHERS_NUMBER; i++)
-        pthread_create (&philosophers[i], NULL, philosopher, (void *) i );
+        pthread_create(&philosophers[i], NULL, philosopher, (void *) i );
     for (int i = 0; i < PHILOSOPHERS_NUMBER; i++)
-        pthread_join (philosophers[i], NULL);
+        pthread_join(philosophers[i], NULL);
 
     pthread_exit(0);
 }
