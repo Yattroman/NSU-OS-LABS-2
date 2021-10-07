@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <string.h>
 
 #define THINKING 0
 #define HUNGRY 1
@@ -8,14 +9,32 @@
 #define PHILOSOPHERS_NUMBER 5
 #define DELAY 1
 #define MAX_FOOD 5
+#define BUFFER_DEF_LENGTH 256
 
+char errorBuffer[BUFFER_DEF_LENGTH];
 int foodEaten[PHILOSOPHERS_NUMBER];
 int state[PHILOSOPHERS_NUMBER];
 int philosophersIDs[PHILOSOPHERS_NUMBER];
 
 pthread_t philosophers[PHILOSOPHERS_NUMBER];
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t condVars[PHILOSOPHERS_NUMBER];
+pthread_cond_t philoHelpers[PHILOSOPHERS_NUMBER];
+
+void freeResources(){
+    pthread_mutex_destroy(&mutex);
+    for (int i = 0; i < PHILOSOPHERS_NUMBER; ++i) {
+        pthread_cond_destroy(&philoHelpers[i]);
+    }
+}
+
+void verifyPthreadFunctions(int returnCode, const char* functionName){
+    strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
+    if(returnCode < 0){
+        fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
+        freeResources();
+        pthread_exit(NULL);
+    }
+}
 
 int getLeftNeighbour(int philosopherID){
     return (philosopherID + PHILOSOPHERS_NUMBER - 1) % PHILOSOPHERS_NUMBER;
@@ -40,30 +59,30 @@ void eat(int time) {
 void check(int philosopherID){
     if(state[getLeftNeighbour(philosopherID)] != EATING && state[philosopherID] == HUNGRY && state[getRightNeighbour(philosopherID)] != EATING){
         state[philosopherID] = EATING;
-        pthread_cond_signal(&condVars[philosopherID]);
+        verifyPthreadFunctions(pthread_cond_signal(&philoHelpers[philosopherID]), "pthread_cond_signal");
     }
 }
 
 void getForks(int philosopherID){
-    pthread_mutex_lock(&mutex);
+    verifyPthreadFunctions(pthread_mutex_lock(&mutex), "pthread_mutex_lock");
 
     state[philosopherID] = HUNGRY;
     check(philosopherID);
     while (state[philosopherID] != EATING) {
-        pthread_cond_wait(&condVars[philosopherID], &mutex);
+        verifyPthreadFunctions(pthread_cond_wait(&philoHelpers[philosopherID], &mutex), "pthread_cond_wait");
     }
 
-    pthread_mutex_unlock(&mutex);
+    verifyPthreadFunctions(pthread_mutex_unlock(&mutex), "pthread_mutex_unlock");
 }
 
 void downForks(int philosopherID){
-    pthread_mutex_lock(&mutex);
+    verifyPthreadFunctions(pthread_mutex_lock(&mutex), "pthread_mutex_lock");
 
     state[philosopherID] = THINKING;
     check(getLeftNeighbour(philosopherID));
     check(getRightNeighbour(philosopherID));
 
-    pthread_mutex_unlock(&mutex);
+    verifyPthreadFunctions(pthread_mutex_unlock(&mutex), "pthread_mutex_unlock");
 }
 
 void * philosopher (void *args) {
@@ -96,13 +115,15 @@ int main (int argn, char **argv) {
         state[i] = THINKING;
         foodEaten[i] = 0;
         philosophersIDs[i] = i;
-        pthread_cond_init(&condVars[i], NULL);
+        pthread_cond_init(&philoHelpers[i], NULL);
         pthread_create(&philosophers[i], NULL, philosopher, (void*) &philosophersIDs[i] );
     }
 
     for (int i = 0; i < PHILOSOPHERS_NUMBER; i++){
         pthread_join(philosophers[i], NULL);
     }
+
+    freeResources();
 
     pthread_exit(0);
 }
