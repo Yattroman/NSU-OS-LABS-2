@@ -11,9 +11,11 @@
 #define YES 1
 #define NO 0
 #define BUFFER_DEF_LENGTH 256
+#define SLEEP_TIME 1
 
 char errorBuffer[BUFFER_DEF_LENGTH];
 pthread_mutex_t mutexes[MUTEXES_NUMBER];
+pthread_t parentID;
 
 int hasItPrintedString = NO;
 
@@ -37,8 +39,19 @@ void verifyPthreadFunctions(int returnCode, const char *functionName) {
 
 void *writeStrings(void *str) {
     int currMutexIdx = 1;
+    pthread_t id = pthread_self();
+
+    if(id != parentID){
+        while (!hasItPrintedString){
+            verifyPthreadFunctions(pthread_mutex_lock(&mutexes[0]), "pthread_mutex_lock");
+            verifyPthreadFunctions(sched_yield(), "sched_yield");
+        }
+    } else {
+        sleep(SLEEP_TIME);
+    }
 
     verifyPthreadFunctions(pthread_mutex_lock(&mutexes[2]), "pthread_mutex_lock");
+
     if (hasItPrintedString)
         verifyPthreadFunctions(pthread_mutex_unlock(&mutexes[0]), "pthread_mutex_unlock");
     for (int i = 0; i < ITERATIONS * MUTEXES_NUMBER; i++) {
@@ -52,6 +65,7 @@ void *writeStrings(void *str) {
         }
         currMutexIdx = (currMutexIdx + 1) % MUTEXES_NUMBER;
     }
+
     verifyPthreadFunctions(pthread_mutex_unlock(&mutexes[2]), "pthread_mutex_unlock");
 
     return NULL;
@@ -72,15 +86,21 @@ void initMutexes() {
 int main() {
     pthread_t childrenThread;
 
+    parentID = pthread_self();
     initMutexes();
 
     verifyPthreadFunctions(pthread_create(&childrenThread, NULL, writeStrings, (void *) "Children message"), "pthread_create");
 
-//    while (!printed) { sched_yield(); }
-
     writeStrings((void *) "Parent message");
 
-    verifyPthreadFunctions(pthread_join(childrenThread, NULL), "pthread_join");
+    void * returnedVal;
+    verifyPthreadFunctions(pthread_join(childrenThread, &returnedVal), "pthread_join");
+
+    if (returnedVal == PTHREAD_CANCELED) {
+        printf("Thread was cancelled\n");
+    } else {
+        printf("Thread was joined normally\n");
+    }
 
     pthread_exit(EXIT_SUCCESS);
 }
