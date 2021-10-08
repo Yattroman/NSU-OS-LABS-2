@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define THREADS_NUMBER 2
 #define MUTEXES_NUMBER 3
 #define ITERATIONS 10
 #define STATUS_SUCCESS 0
