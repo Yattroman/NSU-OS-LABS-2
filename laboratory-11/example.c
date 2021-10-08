@@ -42,16 +42,16 @@ void *writeStrings(void *str) {
     verifyPthreadFunctions(pthread_mutex_lock(&mutexes[2]), "pthread_mutex_lock");
     if (hasItPrintedString)
         verifyPthreadFunctions(pthread_mutex_unlock(&mutexes[0]), "pthread_mutex_unlock");
-    for (int i = 0; i < ITERATIONS * 3; i++) {
+    for (int i = 0; i < ITERATIONS * MUTEXES_NUMBER; i++) {
         verifyPthreadFunctions(pthread_mutex_lock(&mutexes[currMutexIdx]), "pthread_mutex_lock");
-        currMutexIdx = (currMutexIdx + 1) % 3;
+        currMutexIdx = (currMutexIdx + 1) % MUTEXES_NUMBER;
         verifyPthreadFunctions(pthread_mutex_unlock(&mutexes[currMutexIdx]), "pthread_mutex_unlock");
         if (currMutexIdx == 2) {
             fprintf(stdout, "%s\n",(const char *) str);
             fflush(stdout);
             hasItPrintedString = YES;
         }
-        currMutexIdx = (currMutexIdx + 1) % 3;
+        currMutexIdx = (currMutexIdx + 1) % MUTEXES_NUMBER;
     }
     verifyPthreadFunctions(pthread_mutex_unlock(&mutexes[2]), "pthread_mutex_unlock");
 
