@@ -73,11 +73,11 @@ int main(){
     verifyPthreadFunctions(pthread_join(childrenThread, &returnedVal), "pthread_join");
 
     if (returnedVal == PTHREAD_CANCELED) {
-        printf("\nThread was cancelled\n");
+        fprintf(stdout, "\nThread was cancelled\n");
     } else {
-        printf("\nThread was joined normally\n");
+        fprintf(stdout, "\nThread was joined normally\n");
     }
-    
+
     freeResources();
 
     pthread_exit(STATUS_SUCCESS);

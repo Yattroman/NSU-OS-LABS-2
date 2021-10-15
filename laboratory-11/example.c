@@ -12,6 +12,7 @@
 #define NO 0
 #define BUFFER_DEF_LENGTH 256
 #define SLEEP_TIME 500000
+#define START_MUTEX_INDEX 1
 
 char errorBuffer[BUFFER_DEF_LENGTH];
 pthread_mutex_t mutexes[MUTEXES_NUMBER];
@@ -38,7 +39,7 @@ void verifyPthreadFunctions(int returnCode, const char *functionName) {
 }
 
 void *writeStrings(void *str) {
-    int currMutexIdx = 1;
+    int currMutexIdx = START_MUTEX_INDEX;
     pthread_t id = pthread_self();
 
     if(id != parentID){
