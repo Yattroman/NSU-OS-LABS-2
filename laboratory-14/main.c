@@ -77,6 +77,8 @@ int main(){
     } else {
         printf("\nThread was joined normally\n");
     }
+    
+    freeResources();
 
     pthread_exit(STATUS_SUCCESS);
 }
