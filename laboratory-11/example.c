@@ -89,7 +89,7 @@ int main() {
     parentID = pthread_self();
     initMutexes();
 
-    verifyPthreadFunctions(pthread_create(&childrenThread, NULL, writeStrings, (void *) "Children message"), "pthread_create");
+    verifyPthreadFunctions(pthread_create(&childrenThread, NULL, writeStrings, (void *) "Child message"), "pthread_create");
 
     writeStrings((void *) "Parent message");
 

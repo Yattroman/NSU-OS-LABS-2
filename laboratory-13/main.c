@@ -69,7 +69,7 @@ void * writeStrings(void * arg){
 int main(){
     pthread_t childrenThread;
 
-    taskContext childrenTask = {0, "Children message"};
+    taskContext childrenTask = {0, "Child message"};
     taskContext parentTask = {1, "Parent message"};
 
     verifyPthreadFunctions(pthread_create(&childrenThread, NULL, writeStrings, (void *) &childrenTask), "pthread_create");
@@ -82,6 +82,8 @@ int main(){
     } else {
         printf("\nThread was joined normally\n");
     }
+
+    freeResources();
 
     pthread_exit(STATUS_SUCCESS);
 }
