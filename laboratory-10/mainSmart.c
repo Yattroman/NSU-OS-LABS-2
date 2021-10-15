@@ -7,8 +7,8 @@
 #define HUNGRY 1
 #define EATING 2
 #define PHILOSOPHERS_NUMBER 5
-#define DELAY 1
-#define MAX_FOOD 5
+#define DELAY 0
+#define MAX_FOOD 51
 #define BUFFER_DEF_LENGTH 256
 
 char errorBuffer[BUFFER_DEF_LENGTH];
@@ -17,11 +17,12 @@ int state[PHILOSOPHERS_NUMBER];
 int philosophersIDs[PHILOSOPHERS_NUMBER];
 
 pthread_t philosophers[PHILOSOPHERS_NUMBER];
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t forkslock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t foodlock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t philoHelpers[PHILOSOPHERS_NUMBER];
 
 void freeResources(){
-    pthread_mutex_destroy(&mutex);
+    pthread_mutex_destroy(&forkslock);
     for (int i = 0; i < PHILOSOPHERS_NUMBER; ++i) {
         pthread_cond_destroy(&philoHelpers[i]);
     }
@@ -64,25 +65,41 @@ void check(int philosopherID){
 }
 
 void getForks(int philosopherID){
-    verifyPthreadFunctions(pthread_mutex_lock(&mutex), "pthread_mutex_lock");
+    verifyPthreadFunctions(pthread_mutex_lock(&forkslock), "pthread_mutex_lock");
 
     state[philosopherID] = HUNGRY;
     check(philosopherID);
     while (state[philosopherID] != EATING) {
-        verifyPthreadFunctions(pthread_cond_wait(&philoHelpers[philosopherID], &mutex), "pthread_cond_wait");
+        verifyPthreadFunctions(pthread_cond_wait(&philoHelpers[philosopherID], &forkslock), "pthread_cond_wait");
     }
 
-    verifyPthreadFunctions(pthread_mutex_unlock(&mutex), "pthread_mutex_unlock");
+    verifyPthreadFunctions(pthread_mutex_unlock(&forkslock), "pthread_mutex_unlock");
 }
 
 void downForks(int philosopherID){
-    verifyPthreadFunctions(pthread_mutex_lock(&mutex), "pthread_mutex_lock");
+    verifyPthreadFunctions(pthread_mutex_lock(&forkslock), "pthread_mutex_lock");
 
     state[philosopherID] = THINKING;
     check(getLeftNeighbour(philosopherID));
     check(getRightNeighbour(philosopherID));
 
-    verifyPthreadFunctions(pthread_mutex_unlock(&mutex), "pthread_mutex_unlock");
+    foodEaten[philosopherID]++;
+
+    verifyPthreadFunctions(pthread_mutex_unlock(&forkslock), "pthread_mutex_unlock");
+}
+
+int foodOnTable() {
+    static int food = MAX_FOOD;
+    int myfood;
+
+    pthread_mutex_lock (&foodlock);
+    if (food > 0) {
+        food--;
+    }
+
+    myfood = food;
+    pthread_mutex_unlock (&foodlock);
+    return myfood;
 }
 
 void * philosopher (void *args) {
@@ -91,16 +108,18 @@ void * philosopher (void *args) {
     fprintf(stdout,"Philosopher %d sitting down to dinner.\n", philosopherID);
     fflush(stdout);
 
-    while(foodEaten[philosopherID] < MAX_FOOD){
+    while(foodOnTable()){
+
         fprintf(stdout, "Philosopher %d: is thinking.\n", philosopherID);
         fflush(stdout);
+
         think(getTime(philosopherID));
 
         getForks(philosopherID);
 
-        foodEaten[philosopherID] += 1;
         fprintf(stdout, "Philosopher %d: get dish %d.\n", philosopherID, foodEaten[philosopherID]);
         fflush(stdout);
+
         eat(getTime(philosopherID));
 
         downForks(philosopherID);
@@ -121,6 +140,7 @@ int main (int argn, char **argv) {
 
     for (int i = 0; i < PHILOSOPHERS_NUMBER; i++){
         pthread_join(philosophers[i], NULL);
+        printf("philosopher %d eat %d meals\n", i, foodEaten[i]);
     }
 
     freeResources();

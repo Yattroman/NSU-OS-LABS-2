@@ -5,13 +5,13 @@
 #include <string.h>
 
 #define MUTEXES_NUMBER 3
-#define ITERATIONS 10
+#define ITERATIONS_NUM 10
 #define STATUS_SUCCESS 0
 #define STDOUT 0
 #define YES 1
 #define NO 0
 #define BUFFER_DEF_LENGTH 256
-#define SLEEP_TIME 1
+#define SLEEP_TIME 500000
 
 char errorBuffer[BUFFER_DEF_LENGTH];
 pthread_mutex_t mutexes[MUTEXES_NUMBER];
@@ -47,14 +47,14 @@ void *writeStrings(void *str) {
             verifyPthreadFunctions(sched_yield(), "sched_yield");
         }
     } else {
-        sleep(SLEEP_TIME);
+        usleep(SLEEP_TIME);
     }
 
     verifyPthreadFunctions(pthread_mutex_lock(&mutexes[2]), "pthread_mutex_lock");
 
     if (hasItPrintedString)
         verifyPthreadFunctions(pthread_mutex_unlock(&mutexes[0]), "pthread_mutex_unlock");
-    for (int i = 0; i < ITERATIONS * MUTEXES_NUMBER; i++) {
+    for (int i = 0; i < ITERATIONS_NUM * MUTEXES_NUMBER; i++) {
         verifyPthreadFunctions(pthread_mutex_lock(&mutexes[currMutexIdx]), "pthread_mutex_lock");
         currMutexIdx = (currMutexIdx + 1) % MUTEXES_NUMBER;
         verifyPthreadFunctions(pthread_mutex_unlock(&mutexes[currMutexIdx]), "pthread_mutex_unlock");
