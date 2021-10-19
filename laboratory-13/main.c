@@ -52,7 +52,7 @@ void * writeStrings(void * arg){
             verifyPthreadFunctions(pthread_cond_wait(&condVar, &mutex), "pthread_cond_wait");
         }
 
-        fprintf(stdout, "%s\n", infoString);
+        fprintf(stdout, "%s: %d\n", infoString, i);
         fflush(stdout);
 
         currentTurn = !turnIdentifier;

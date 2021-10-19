@@ -34,10 +34,10 @@ void * writeStringsParent(void * arg){
     const char* message = (const char*) arg;
 
     for (int i = 0; i < ITERATIONS_NUM; ++i) {
-        verifyPthreadFunctions(sem_wait(&semaphoreFirst), "sem_wait");
+        sem_wait(&semaphoreFirst);
         fprintf(stdout, "%s: %d\n", message, i);
         fflush(stdout);
-        verifyPthreadFunctions(sem_post(&semaphoreSecond), "sem_post");
+        sem_post(&semaphoreSecond);
     }
 
     return NULL;
@@ -47,10 +47,10 @@ void * writeStringsChild(void * arg){
     const char* message = (const char*) arg;
 
     for (int i = 0; i < ITERATIONS_NUM; ++i) {
-        verifyPthreadFunctions(sem_wait(&semaphoreSecond), "sem_wait");
+        sem_wait(&semaphoreSecond);
         fprintf(stdout, "%s: %d\n", message, i);
         fflush(stdout);
-        verifyPthreadFunctions(sem_post(&semaphoreFirst), "sem_post");
+        sem_post(&semaphoreFirst);
     }
 
     return NULL;

@@ -12,8 +12,8 @@
 #define STATUS_FAIL -1
 #define WAIT_ERROR -1
 
-#define SEM_FIRST_NAME "semFirst"
-#define SEM_SECOND_NAME "semSecond"
+#define SEM_FIRST_NAME "/semFirst"
+#define SEM_SECOND_NAME "/semSecond"
 #define CHILD_RETURN_CODE 0
 #define ITERATIONS_NUM 10
 
@@ -22,6 +22,8 @@ char errorBuffer[BUFFER_DEF_LENGTH];
 int waitForChildProcess(){
     int currentStatus = 0;
     pid_t statusWait = wait(&currentStatus);
+
+    printf("\n");
 
     if(statusWait == WAIT_ERROR){
         perror("waitForChildProcess. There are problems with wait");
@@ -39,29 +41,25 @@ int waitForChildProcess(){
         printf("Child process exited with status: %d\n", exitStatus);
     }
 
+    fflush(stdout);
+
     return STATUS_SUCCESS;
 }
 
 void freeResources() {
-
-}
-
-void verifyPthreadFunctions(int returnCode, const char *functionName) {
-    strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
-    if (returnCode < STATUS_SUCCESS) {
-        fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
-        freeResources();
-        pthread_exit(NULL);
-    }
+    sem_unlink(SEM_FIRST_NAME);
+    sem_unlink(SEM_SECOND_NAME);
 }
 
 void writeStringsParent(const char * message, sem_t *semFirst, sem_t *semSecond) {
 
     for (int i = 0; i < ITERATIONS_NUM; ++i) {
-        verifyPthreadFunctions(sem_wait(semFirst), "sem_wait");
+        sem_wait(semFirst);
+
         fprintf(stdout, "%s: %d\n", message, i);
         fflush(stdout);
-        verifyPthreadFunctions(sem_post(semSecond), "sem_post");
+
+        sem_post(semSecond);
     }
 
 }
@@ -69,10 +67,12 @@ void writeStringsParent(const char * message, sem_t *semFirst, sem_t *semSecond)
 void writeStringsChild(const char * message, sem_t *semFirst, sem_t *semSecond) {
 
     for (int i = 0; i < ITERATIONS_NUM; ++i) {
-        verifyPthreadFunctions(sem_wait(semSecond), "sem_wait");
+        sem_wait(semSecond);
+
         fprintf(stdout, "%s: %d\n", message, i);
         fflush(stdout);
-        verifyPthreadFunctions(sem_post(semFirst), "sem_post");
+
+        sem_post(semFirst);
     }
 
 }
@@ -92,14 +92,16 @@ int main(){
         writeStringsChild("Child message", semFirst, semSecond);
     } else {
         writeStringsParent("Parent message", semFirst, semSecond);
-    }
 
-    int returnStatus = waitForChildProcess();
-    if(returnStatus < STATUS_SUCCESS){
-        exit(EXIT_FAILURE);
+        int returnStatus = waitForChildProcess();
+        if(returnStatus < STATUS_SUCCESS){
+            fprintf(stderr, "waitForChildProcess error.\n");
+            exit(EXIT_FAILURE);
+        }
+
     }
 
     freeResources();
 
-    pthread_exit(STATUS_SUCCESS);
+    exit(STATUS_SUCCESS);
 }
