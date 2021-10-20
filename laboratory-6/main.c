@@ -148,9 +148,9 @@ int main() {
         pthread_create(&tid[i], NULL, printStringsSorted, (void*) strings[i]);
     }
 
-    /*for (int i = 0; i < stringsEntered; ++i) {
+    for (int i = 0; i < stringsEntered; ++i) {
         pthread_join(tid[i], NULL);
-    }*/
+    }
 
     pthread_exit(NULL);
 }
