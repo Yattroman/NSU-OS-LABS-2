@@ -181,5 +181,7 @@ int main() {
     printList(list);
     freeList(list);
 
+    sem_destroy(&semaphore);
+
     pthread_exit(NULL);
 }

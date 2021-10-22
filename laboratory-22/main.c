@@ -3,9 +3,6 @@
 #include <unistd.h>
 #include <string.h>
 
-#define THINKING 0
-#define HUNGRY 1
-#define EATING 2
 #define PHILOSOPHERS_NUMBER 5
 #define DELAY 0
 #define MAX_FOOD 51
@@ -16,16 +13,18 @@ int foodEaten[PHILOSOPHERS_NUMBER];
 int state[PHILOSOPHERS_NUMBER];
 int philosophersIDs[PHILOSOPHERS_NUMBER];
 
+int food = MAX_FOOD;
+
 pthread_t philosophers[PHILOSOPHERS_NUMBER];
+pthread_mutex_t forks[PHILOSOPHERS_NUMBER];
+
+pthread_cond_t forksCV = PTHREAD_COND_INITIALIZER;
+
 pthread_mutex_t forkslock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t foodlock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t philoHelpers[PHILOSOPHERS_NUMBER];
 
 void freeResources(){
-    pthread_mutex_destroy(&forkslock);
-    for (int i = 0; i < PHILOSOPHERS_NUMBER; ++i) {
-        pthread_cond_destroy(&philoHelpers[i]);
-    }
+
 }
 
 void verifyPthreadFunctions(int returnCode, const char* functionName){
@@ -37,11 +36,11 @@ void verifyPthreadFunctions(int returnCode, const char* functionName){
     }
 }
 
-int getLeftNeighbour(int philosopherID){
+int getLeftForkNumber(int philosopherID){
     return (philosopherID + PHILOSOPHERS_NUMBER - 1) % PHILOSOPHERS_NUMBER;
 }
 
-int getRightNeighbour(int philosopherID){
+int getRightForkNumber(int philosopherID){
     return (philosopherID + 1) % PHILOSOPHERS_NUMBER;
 }
 
@@ -57,39 +56,22 @@ void eat(int time) {
     sleep(time);
 }
 
-void check(int philosopherID){
-    if(state[getLeftNeighbour(philosopherID)] != EATING && state[philosopherID] == HUNGRY && state[getRightNeighbour(philosopherID)] != EATING){
-        state[philosopherID] = EATING;
-        verifyPthreadFunctions(pthread_cond_signal(&philoHelpers[philosopherID]), "pthread_cond_signal");
-    }
+int tryGetFork(int philosopherID, char * hand, int fork){
+    printf ("Philosopher %d: trying to get fork %d in %s hand\n", philosopherID, fork, hand);
+    return (pthread_mutex_trylock(&forks[fork]) == 0);
 }
 
-void getForks(int philosopherID){
-    verifyPthreadFunctions(pthread_mutex_lock(&forkslock), "pthread_mutex_lock");
-
-    state[philosopherID] = HUNGRY;
-    check(philosopherID);
-    while (state[philosopherID] != EATING) {
-        verifyPthreadFunctions(pthread_cond_wait(&philoHelpers[philosopherID], &forkslock), "pthread_cond_wait");
-    }
-
-    verifyPthreadFunctions(pthread_mutex_unlock(&forkslock), "pthread_mutex_unlock");
+void downFork(int philosopherID, char * hand, int fork){
+    pthread_mutex_unlock(&forks[fork]);
+    printf("Philosopher %d: downs fork %d from %s hand\n", philosopherID, fork, hand);
 }
 
 void downForks(int philosopherID){
-    verifyPthreadFunctions(pthread_mutex_lock(&forkslock), "pthread_mutex_lock");
-
-    state[philosopherID] = THINKING;
-    check(getLeftNeighbour(philosopherID));
-    check(getRightNeighbour(philosopherID));
-
-    foodEaten[philosopherID]++;
-
-    verifyPthreadFunctions(pthread_mutex_unlock(&forkslock), "pthread_mutex_unlock");
+    downFork(philosopherID, "left", getLeftForkNumber(philosopherID));
+    downFork(philosopherID, "right", getRightForkNumber(philosopherID));
 }
 
 int foodOnTable() {
-    static int food = MAX_FOOD;
     int myfood;
 
     pthread_mutex_lock (&foodlock);
@@ -99,7 +81,14 @@ int foodOnTable() {
 
     myfood = food;
     pthread_mutex_unlock (&foodlock);
+
     return myfood;
+}
+
+void returnFood(int philosopherID){
+    pthread_mutex_lock(&foodlock);
+    food++;;
+    pthread_mutex_unlock(&foodlock);
 }
 
 void * philosopher (void *args) {
@@ -110,19 +99,38 @@ void * philosopher (void *args) {
 
     while(foodOnTable()){
 
-        fprintf(stdout, "Philosopher %d: is thinking.\n", philosopherID);
-        fflush(stdout);
+        pthread_mutex_lock(&forkslock);
+        printf ("Philosopher %d: try get dish %d.\n", philosopherID, foodEaten[philosopherID]);
 
-        think(getTime(philosopherID));
+        if(!tryGetFork(philosopherID, "left", getLeftForkNumber(philosopherID))){
+            returnFood(philosopherID);
+            pthread_cond_wait(&forksCV, &forkslock);
+            pthread_mutex_unlock(&forkslock);
+        } else {
+            printf ("Philosopher %d: got left fork %d\n", philosopherID, getLeftForkNumber(philosopherID));
 
-        getForks(philosopherID);
+            if(!tryGetFork(philosopherID, "right", getRightForkNumber(philosopherID))){
+                downFork(philosopherID, "left", getLeftForkNumber(philosopherID));
+                returnFood(philosopherID);
+                pthread_cond_wait(&forksCV, &forkslock);
+                pthread_mutex_unlock(&forkslock);
+            } else {
+                printf ("Philosopher %d: got right fork %d\n", philosopherID, getRightForkNumber(philosopherID));
+                pthread_mutex_unlock(&forkslock);
 
-        fprintf(stdout, "Philosopher %d: get dish %d.\n", philosopherID, foodEaten[philosopherID]);
-        fflush(stdout);
+                printf("Philosopher %d is eating: %d", philosopherID, foodEaten[philosopherID]);
+                foodEaten[philosopherID]++;
+                eat(getTime(philosopherID));
 
-        eat(getTime(philosopherID));
+                pthread_mutex_lock(&forkslock);
+                // down forks and notify others about this
+                downForks(philosopherID);
+                pthread_cond_broadcast(&forksCV);
+                pthread_mutex_unlock(&forkslock);
+            }
 
-        downForks(philosopherID);
+        }
+        pthread_mutex_unlock(&forkslock);
     }
 
     return NULL;
@@ -131,10 +139,8 @@ void * philosopher (void *args) {
 int main (int argn, char **argv) {
 
     for (int i = 0; i < PHILOSOPHERS_NUMBER; i++){
-        state[i] = THINKING;
         foodEaten[i] = 0;
         philosophersIDs[i] = i;
-        pthread_cond_init(&philoHelpers[i], NULL);
         pthread_create(&philosophers[i], NULL, philosopher, (void*) &philosophersIDs[i] );
     }
 
