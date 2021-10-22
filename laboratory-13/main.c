@@ -20,6 +20,7 @@ typedef struct taskContext{
 } taskContext;
 
 void freeResources() {
+
     if (pthread_mutex_destroy(&mutex) != STATUS_SUCCESS) {
         fprintf(stderr, "pthread_mutex_destroy problems");
         pthread_exit(NULL);
@@ -28,13 +29,13 @@ void freeResources() {
         fprintf(stderr, "pthread_cond_destroy problems");
         pthread_exit(NULL);
     }
+
 }
 
 void verifyPthreadFunctions(int returnCode, const char *functionName) {
     strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
     if (returnCode < STATUS_SUCCESS) {
         fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
-        freeResources();
         pthread_exit(NULL);
     }
 }

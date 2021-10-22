@@ -1,5 +1,6 @@
 
 #include <pthread.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <semaphore.h>
@@ -21,11 +22,18 @@ void freeResources() {
     sem_destroy(&semaphoreSecond);
 }
 
+void verifyFunctionsByErrno(int returnCode, const char *functionName) {
+    strerror_r(errno, errorBuffer, BUFFER_DEF_LENGTH);
+    if (returnCode < STATUS_SUCCESS) {
+        fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
+        pthread_exit(NULL);
+    }
+}
+
 void verifyPthreadFunctions(int returnCode, const char *functionName) {
     strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
     if (returnCode < STATUS_SUCCESS) {
         fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
-        freeResources();
         pthread_exit(NULL);
     }
 }
@@ -34,10 +42,10 @@ void * writeStringsParent(void * arg){
     const char* message = (const char*) arg;
 
     for (int i = 0; i < ITERATIONS_NUM; ++i) {
-        sem_wait(&semaphoreFirst);
+        verifyFunctionsByErrno(sem_wait(&semaphoreFirst), "sem_post");
         fprintf(stdout, "%s: %d\n", message, i);
         fflush(stdout);
-        sem_post(&semaphoreSecond);
+        verifyFunctionsByErrno(sem_post(&semaphoreSecond), "sem_post");
     }
 
     return NULL;
@@ -47,18 +55,18 @@ void * writeStringsChild(void * arg){
     const char* message = (const char*) arg;
 
     for (int i = 0; i < ITERATIONS_NUM; ++i) {
-        sem_wait(&semaphoreSecond);
+        verifyFunctionsByErrno(sem_wait(&semaphoreSecond), "sem_wait");
         fprintf(stdout, "%s: %d\n", message, i);
         fflush(stdout);
-        sem_post(&semaphoreFirst);
+        verifyFunctionsByErrno(sem_post(&semaphoreFirst), "sem_post");
     }
 
     return NULL;
 }
 
 void initSemaphores(){
-    sem_init(&semaphoreFirst, 0 , SEM_PARENT_START_VAL);
-    sem_init(&semaphoreSecond, 0 , SEM_CHILD_START_VAL);
+    verifyFunctionsByErrno(sem_init(&semaphoreFirst, 0 , SEM_PARENT_START_VAL), "sem_init");
+    verifyFunctionsByErrno(sem_init(&semaphoreSecond, 0 , SEM_CHILD_START_VAL), "sem_init");
 }
 
 

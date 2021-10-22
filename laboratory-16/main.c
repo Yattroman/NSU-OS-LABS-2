@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -18,6 +19,14 @@
 #define ITERATIONS_NUM 10
 
 char errorBuffer[BUFFER_DEF_LENGTH];
+
+void verifyFunctionsByErrno(int returnCode, const char *functionName) {
+    strerror_r(errno, errorBuffer, BUFFER_DEF_LENGTH);
+    if (returnCode < STATUS_SUCCESS) {
+        fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
+        pthread_exit(NULL);
+    }
+}
 
 int waitForChildProcess(){
     int currentStatus = 0;
@@ -46,20 +55,22 @@ int waitForChildProcess(){
     return STATUS_SUCCESS;
 }
 
-void freeResources() {
+void freeResources(sem_t* semFirst, sem_t* semSecond) {
     sem_unlink(SEM_FIRST_NAME);
     sem_unlink(SEM_SECOND_NAME);
+    sem_destroy(semFirst);
+    sem_destroy(semSecond);
 }
 
 void writeStringsParent(const char * message, sem_t *semFirst, sem_t *semSecond) {
 
     for (int i = 0; i < ITERATIONS_NUM; ++i) {
-        sem_wait(semFirst);
+        verifyFunctionsByErrno(sem_wait(semFirst), "sem_wait");
 
         fprintf(stdout, "%s: %d\n", message, i);
         fflush(stdout);
 
-        sem_post(semSecond);
+        verifyFunctionsByErrno(sem_post(semSecond), "sem_post");
     }
 
 }
@@ -67,12 +78,12 @@ void writeStringsParent(const char * message, sem_t *semFirst, sem_t *semSecond)
 void writeStringsChild(const char * message, sem_t *semFirst, sem_t *semSecond) {
 
     for (int i = 0; i < ITERATIONS_NUM; ++i) {
-        sem_wait(semSecond);
+        verifyFunctionsByErrno(sem_wait(semSecond), "sem_wait");
 
         fprintf(stdout, "%s: %d\n", message, i);
         fflush(stdout);
 
-        sem_post(semFirst);
+        verifyFunctionsByErrno(sem_post(semFirst), "sem_post");
     }
 
 }
@@ -101,7 +112,7 @@ int main(){
 
     }
 
-    freeResources();
+    freeResources(semFirst, semSecond);
 
     exit(STATUS_SUCCESS);
 }

@@ -87,7 +87,7 @@ int foodOnTable() {
 
 void returnFood(int philosopherID){
     pthread_mutex_lock(&foodlock);
-    food++;;
+    food++;
     pthread_mutex_unlock(&foodlock);
 }
 
@@ -118,7 +118,7 @@ void * philosopher (void *args) {
                 printf ("Philosopher %d: got right fork %d\n", philosopherID, getRightForkNumber(philosopherID));
                 pthread_mutex_unlock(&forkslock);
 
-                printf("Philosopher %d is eating: %d", philosopherID, foodEaten[philosopherID]);
+                printf("Philosopher %d is eating: %d\n", philosopherID, foodEaten[philosopherID]);
                 foodEaten[philosopherID]++;
                 eat(getTime(philosopherID));
 
