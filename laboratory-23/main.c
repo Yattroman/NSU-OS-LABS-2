@@ -4,6 +4,8 @@
 #include <malloc.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <semaphore.h>
+#include "list.c"
 
 #define MAX_THREADS_NUMBER 100
 #define STATUS_FAILURE -1
@@ -15,6 +17,14 @@
 #define EXPAND_COEF 2
 #define SLEEP_COEF 1000000
 #define INPUT_HOLDER_INIT_SIZE 256
+#define SEM_START_VAL 1
+
+sem_t semaphore;
+
+typedef struct listInfo {
+    List* list;
+    char* string;
+} listInfo;
 
 int expandInputBuffer(char **inputHolder, size_t *bufferSize) {
     char *newInputHolder = NULL;
@@ -125,12 +135,17 @@ int getStrings(char **strings) {
     return stringsEntered;
 }
 
-void *printStringsSorted(void *arg) {
-    char *string = (char*) arg;
+void *updateSortedStringsList(void *arg) {
+    listInfo *info = (listInfo*) arg;
+
+    char* string = info->string;
+    List* list = info->list;
 
     usleep(strlen(string)*SLEEP_COEF);
 
-    printf("%s\n", string);
+    sem_wait(&semaphore);
+        push(list, createNode(string));
+    sem_post(&semaphore);
 
     return NULL;
 }
@@ -139,6 +154,11 @@ int main() {
     pthread_t tid[MAX_THREADS_NUMBER];
     char *strings[MAX_THREADS_NUMBER];
 
+    List* list = (List*) malloc(sizeof(List));
+    initList(list);
+
+    sem_init(&semaphore, 0 , SEM_START_VAL);
+
     int stringsEntered = getStrings(strings);
     if (stringsEntered == STATUS_FAILURE) {
         fprintf(stderr, "There are problems with getting strings");
@@ -146,12 +166,20 @@ int main() {
     }
 
     for (int i = 0; i < stringsEntered; ++i) {
-        pthread_create(&tid[i], NULL, printStringsSorted, (void*) strings[i]);
+        listInfo * info = (listInfo*) malloc(sizeof(listInfo));
+        info->list = list;
+        info->string = strings[i];
+
+        pthread_create(&tid[i], NULL, updateSortedStringsList, (void*) info);
     }
 
     for (int i = 0; i < stringsEntered; ++i) {
         pthread_join(tid[i], NULL);
     }
+
+    printf("sorting result:\n");
+    printList(list);
+    freeList(list);
 
     pthread_exit(NULL);
 }
