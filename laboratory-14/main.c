@@ -42,7 +42,7 @@ void * writeStringsParent(void * arg){
     const char* message = (const char*) arg;
 
     for (int i = 0; i < ITERATIONS_NUM; ++i) {
-        verifyFunctionsByErrno(sem_wait(&semaphoreFirst), "sem_post");
+        verifyFunctionsByErrno(sem_wait(&semaphoreFirst), "sem_wait");
         fprintf(stdout, "%s: %d\n", message, i);
         fflush(stdout);
         verifyFunctionsByErrno(sem_post(&semaphoreSecond), "sem_post");

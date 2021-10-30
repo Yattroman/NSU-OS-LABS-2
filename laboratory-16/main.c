@@ -56,10 +56,10 @@ int waitForChildProcess(){
 }
 
 void freeResources(sem_t* semFirst, sem_t* semSecond) {
+    sem_close(semFirst);
+    sem_close(semSecond);
     sem_unlink(SEM_FIRST_NAME);
     sem_unlink(SEM_SECOND_NAME);
-    sem_destroy(semFirst);
-    sem_destroy(semSecond);
 }
 
 void writeStringsParent(const char * message, sem_t *semFirst, sem_t *semSecond) {
