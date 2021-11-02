@@ -15,6 +15,17 @@
 #define EXPAND_COEF 2
 #define SLEEP_COEF 1000000
 #define INPUT_HOLDER_INIT_SIZE 256
+#define BUFFER_DEF_LENGTH 256
+
+char errorBuffer[256];
+
+void verifyPthreadFunctions(int returnCode, const char *functionName) {
+    strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
+    if (returnCode < STATUS_SUCCESS) {
+        fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
+        pthread_exit(NULL);
+    }
+}
 
 int expandInputBuffer(char **inputHolder, size_t *bufferSize) {
     char *newInputHolder = NULL;
@@ -146,11 +157,11 @@ int main() {
     }
 
     for (int i = 0; i < stringsEntered; ++i) {
-        pthread_create(&tid[i], NULL, printStringsSorted, (void*) strings[i]);
+        verifyPthreadFunctions(pthread_create(&tid[i], NULL, printStringsSorted, (void*) strings[i]), "pthread_create");
     }
 
     for (int i = 0; i < stringsEntered; ++i) {
-        pthread_join(tid[i], NULL);
+        verifyPthreadFunctions(pthread_join(tid[i], NULL), "pthread_join");
     }
 
     pthread_exit(NULL);

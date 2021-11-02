@@ -163,12 +163,13 @@ void *updateSortedStringsList(void *arg) {
 
     usleep(strlen(string)*SLEEP_COEF);
 
+    Node * node = createNode(string);
+    if(node == NULL){
+        verifyFunctionsByErrno(sem_post(&semaphore), "sem_post");
+        pthread_exit(NULL);
+    }
+
     verifyFunctionsByErrno(sem_wait(&semaphore), "sem_wait");
-        Node * node = createNode(string);
-        if(node == NULL){
-            verifyFunctionsByErrno(sem_post(&semaphore), "sem_post");
-            pthread_exit(NULL);
-        }
         push(list, node);
     verifyFunctionsByErrno(sem_post(&semaphore), "sem_post");
 
