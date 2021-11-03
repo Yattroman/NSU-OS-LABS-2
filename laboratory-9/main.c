@@ -58,7 +58,7 @@ void *getResultsPart(void *args) {
 
         verifyPthreadFunctions(pthread_mutex_lock(&mutex), "pthread_mutex_lock");
 
-        if (executionStatus == 0 && currentIteration == latestIteration) {
+        if (executionStatus == DISABLED && currentIteration == latestIteration) {
             printf("%d ", currentIteration);
             verifyPthreadFunctions(pthread_mutex_unlock(&mutex), "pthread_mutex_unlock");
             break;
@@ -144,4 +144,6 @@ int main(int argc, char **argv) {
 
     pthread_exit(EXIT_SUCCESS);
 }
+
+// Not Correct Working
 

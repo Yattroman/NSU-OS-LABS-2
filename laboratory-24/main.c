@@ -5,11 +5,12 @@
 #include <errno.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include <signal.h>
 
 #define BUFFER_DEF_LENGTH 256
 #define STATUS_FAILURE -1
 #define STATUS_SUCCESS 0
-#define STATUS_MALLOC_FAIL NULL
+#define STATUS_CALLOC_FAIL NULL
 #define CREATORS_COUNT 4
 #define NO_DETAILS 0
 #define DETAIL_A_TIME_WEIGTH 1
@@ -26,7 +27,7 @@ typedef struct widgetInfoContainer {
     int * widgetsCount;
 } widgetInfoContainer;
 
-int stop = 0;
+int executionStatus = 0;
 char errorBuffer[256];
 
 sem_t detA, detB, detC, module;
@@ -51,13 +52,13 @@ void *detailACreator(void *args) {
     widgetInfoContainer * info = (widgetInfoContainer*) args;
     int * detailsACount = info->detailsACount;
 
-    while (stop != STOP){
+    while (executionStatus != STOP){
         sleep(DETAIL_A_TIME_WEIGTH);
 
         verifyFunctionsByErrno(sem_wait(&detA), "sem_wait");
-        *detailsACount = *detailsACount + 1;
 
-        fprintf(stdout,"Detail A created! %d\n", *detailsACount);
+        *detailsACount = *detailsACount + 1;
+        fprintf(stdout,"> Detail A created! Total: %d\n", *detailsACount);
         fflush(stdout);
 
         verifyFunctionsByErrno(sem_post(&detA), "sem_post");
@@ -71,14 +72,15 @@ void *detailBCreator(void *args) {
     widgetInfoContainer * info = (widgetInfoContainer*) args;
     int * detailsBCount = info->detailsBCount;
 
-    while (stop != STOP){
+    while (executionStatus != STOP){
         sleep(DETAIL_B_TIME_WEIGTH);
 
         verifyFunctionsByErrno(sem_wait(&detB), "sem_wait");
-        *detailsBCount = *detailsBCount + 1;
 
-        fprintf(stdout,"Detail B created! %d\n", *detailsBCount);
+        *detailsBCount = *detailsBCount + 1;
+        fprintf(stdout,"> Detail B created! Total: %d\n", *detailsBCount);
         fflush(stdout);
+
         verifyFunctionsByErrno(sem_post(&detB), "sem_post");
 
     }
@@ -90,14 +92,15 @@ void *detailCCreator(void *args) {
     widgetInfoContainer * info = (widgetInfoContainer*) args;
     int * detailsCCount = info->detailsCCount;
 
-    while (stop != STOP){
+    while (executionStatus != STOP){
         sleep(DETAIL_C_TIME_WEIGTH);
 
         verifyFunctionsByErrno(sem_wait(&detC), "sem_wait");
-        *detailsCCount = *detailsCCount + 1;
 
-        fprintf(stdout,"Detail C created! %d\n", *detailsCCount);
+        *detailsCCount = *detailsCCount + 1;
+        fprintf(stdout,"-> Detail C created! Total: %d\n", *detailsCCount);
         fflush(stdout);
+
         verifyFunctionsByErrno(sem_post(&detC), "sem_post");
 
     }
@@ -112,7 +115,7 @@ void *moduleCreator(void *args){
     int * detailsACount = info->detailsACount;
     int * detailsBCount = info->detailsBCount;
 
-    while (stop != STOP){
+    while (executionStatus != STOP){
 
         verifyFunctionsByErrno(sem_wait(&detA), "sem_wait");
         verifyFunctionsByErrno(sem_wait(&detB), "sem_wait");
@@ -124,13 +127,14 @@ void *moduleCreator(void *args){
         }
 
         verifyFunctionsByErrno(sem_wait(&module), "sem_wait");
+
         *modulesCount = *modulesCount + 1;
         *detailsACount = *detailsACount - 1;
         *detailsBCount = *detailsBCount - 1;
-        verifyFunctionsByErrno(sem_post(&module), "sem_post");
-
-        fprintf(stdout,"Module created! %d. Left: %d details A, %d details B\n", *modulesCount, *detailsACount, *detailsBCount);
+        fprintf(stdout,"-> Module created! Total: %d. Left: %d details A, %d details B\n", *modulesCount, *detailsACount, *detailsBCount);
         fflush(stdout);
+
+        verifyFunctionsByErrno(sem_post(&module), "sem_post");
 
         verifyFunctionsByErrno(sem_post(&detB), "sem_post");
         verifyFunctionsByErrno(sem_post(&detA), "sem_post");
@@ -145,10 +149,10 @@ void *widgetCreator(void *args){
     widgetInfoContainer * info = (widgetInfoContainer*) args;
 
     int * modulesCount = info->modulesCount;
-    int * detailsCCount = info->detailsACount;
+    int * detailsCCount = info->detailsCCount;
     int * widgetsCount = info->widgetsCount;
 
-    while (stop != STOP){
+    while (executionStatus != STOP){
 
         verifyFunctionsByErrno(sem_wait(&detC), "sem_wait");
         verifyFunctionsByErrno(sem_wait(&module), "sem_wait");
@@ -164,10 +168,10 @@ void *widgetCreator(void *args){
         *detailsCCount = *detailsCCount - 1;
 
         if(*widgetsCount > WIDGETS_MAX){
-            stop = STOP;
+            executionStatus = STOP;
         }
 
-        fprintf(stdout,"Widget created! %d. Left: %d modules, %d details C\n", *widgetsCount, *modulesCount, *detailsCCount);
+        fprintf(stdout,"--> Widget created! Total: %d. Left: %d modules, %d details C\n", *widgetsCount, *modulesCount, *detailsCCount);
         fflush(stdout);
 
         verifyFunctionsByErrno(sem_post(&module), "sem_post");
@@ -185,6 +189,25 @@ void initSemaphores(){
     verifyFunctionsByErrno(sem_init(&module, 0, 1), "sem_init");
 }
 
+void stopExecution() {
+    executionStatus = STOP;
+    fprintf(stdout, "Preparing to stop...\n");
+    fflush(stdout);
+}
+
+void freeResources(widgetInfoContainer * info){
+    free(info->widgetsCount);
+    free(info->modulesCount);
+    free(info->detailsCCount);
+    free(info->detailsBCount);
+    free(info->detailsACount);
+
+    sem_destroy(&detA);
+    sem_destroy(&detB);
+    sem_destroy(&detC);
+    sem_destroy(&module);
+}
+
 int main() {
 
     pthread_t creators[CREATORS_COUNT];
@@ -195,13 +218,16 @@ int main() {
     int *modulesCount = (int *) calloc(1, sizeof(int));
     int *widgetsCount = (int *) calloc(1, sizeof(int));
 
-    if(detailsACount == STATUS_MALLOC_FAIL || detailsBCount == STATUS_MALLOC_FAIL || detailsCCount == STATUS_MALLOC_FAIL || modulesCount == STATUS_MALLOC_FAIL || widgetsCount == STATUS_MALLOC_FAIL){
+    if(detailsACount == STATUS_CALLOC_FAIL || detailsBCount == STATUS_CALLOC_FAIL || detailsCCount == STATUS_CALLOC_FAIL || modulesCount == STATUS_CALLOC_FAIL || widgetsCount == STATUS_CALLOC_FAIL){
         verifyFunctionsByErrno(STATUS_FAILURE, "calloc");
     }
 
     initSemaphores();
 
     widgetInfoContainer info = {detailsACount, detailsBCount, detailsCCount, modulesCount, widgetsCount};
+
+    signal(SIGINT, stopExecution);
+    signal(SIGTERM, stopExecution);
 
     verifyPthreadFunctions(pthread_create(&creators[0], NULL, detailACreator, (void*) &info), "pthread_create");
     verifyPthreadFunctions(pthread_create(&creators[1], NULL, detailBCreator, (void*) &info), "pthread_create");
@@ -212,5 +238,11 @@ int main() {
     for (int i = 0; i < CREATORS_COUNT; ++i) {
         verifyPthreadFunctions(pthread_join(creators[i], NULL), "pthread_join");
     }
+
+    fprintf(stdout, "Stopped!\n[%d Widgets, %d Modules, %d details A, %d details B, %d details C]\n",
+            *widgetsCount, *modulesCount, *detailsACount, *detailsBCount, *detailsCCount);
+    fflush(stdout);
+
+    freeResources(&info);
 
 }
