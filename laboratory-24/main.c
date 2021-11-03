@@ -245,4 +245,5 @@ int main() {
 
     freeResources(&info);
 
+    pthread_exit(EXIT_SUCCESS);
 }
