@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <semaphore.h>
 
 #define YES 1
 #define NO 0
@@ -15,6 +16,9 @@
 #define DEFAULT_QUEUE_CAPACITY 10
 #define MAX_STRING_LENGTH 80
 #define ENDLINE_CHARACTER '\0'
+#define MESSAGES_NUMBER 20
+
+sem_t queueLock, emptyBuffLock, fullBuffLock;
 
 typedef struct NodeQ {
     char *msg;
@@ -27,6 +31,11 @@ typedef struct Queue {
     int cursize;
     int capacity;
 } Queue;
+
+typedef struct Info {
+    Queue *queue;
+    int producerNumber;
+} Info;
 
 char errorBuffer[256];
 
@@ -73,21 +82,35 @@ void queueInit(Queue *queue) {
     queue->rear = NULL;
 }
 
+void nodeDestroy(NodeQ *nodeq){
+    free(nodeq->msg);
+    free(nodeq);
+    nodeq = NULL;
+}
+
 // msqdestroy должна вызываться после того, как будет известно, что ни одна нить больше не попытается выполнять операции над очередью.
 void queueDestroy(Queue *queue) {
-
+    NodeQ* current = queue->front;
+    while (current){
+        NodeQ *temp = current;
+        current = current->previous;
+        nodeDestroy(temp);
+    }
+    free(queue);
+    queue = NULL;
 }
 
 // msgdrop unlock waiting operations get and put
 void msqdrop(Queue *queue) {
-
+    sem_post(&fullBuffLock);
+    sem_post(&emptyBuffLock);
 }
 
 // msgput принимает в качестве параметра ASCIIZ строку символов, обрезает ее до 80 символов (если это необходимо) и помещает ее в очередь.
-// Если очередь содержит более 10 записей, msgput блокируется. Функция возвращает количество переданных символов.
+// if queue is full (10 strings) - msgput locks
+// funtion return count of send symbols
 int msgput(Queue *queue, char *msg) {
     if(queue == NULL){
-        putc('l', stdout);
         return STATUS_FAILURE;
     }
 
@@ -95,7 +118,6 @@ int msgput(Queue *queue, char *msg) {
 
     msgToNode = (char*) malloc(sizeof(char)*MAX_STRING_LENGTH + 1);
     if(msgToNode == STATUS_MALLOC_FAIL){
-        putc('m', stdout);
         return STATUS_FAILURE;
     }
     memcpy(msgToNode, msg, sizeof(char)*MAX_STRING_LENGTH);
@@ -104,15 +126,18 @@ int msgput(Queue *queue, char *msg) {
     NodeQ *nodeq = createNodeQ(msgToNode);
 
     if(nodeq == STATUS_FAILURE_MEM){
-        putc('a', stdout);
         return STATUS_FAILURE;
     }
 
-    // It will be critical section
+    sem_wait(&queueLock);
     if(!isQueueFull(queue)){
+        if(isQueueEmpty(queue)){
+            sem_post(&queueLock);
+        }
         if(queue->front == NULL && queue->rear == NULL){
             queue->rear = nodeq;
             queue->front = nodeq;
+            queue->cursize = 1;
         }
 
         queue->rear->previous = nodeq;
@@ -120,6 +145,9 @@ int msgput(Queue *queue, char *msg) {
 
         queue->cursize += 1;
     }
+    sem_post(&queueLock);
+
+    sem_post(&emptyBuffLock);
 
     return strlen(msgToNode);
 }
@@ -134,14 +162,22 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
 
     NodeQ *nodeq = NULL;
 
-    // It will be critical section
+    sem_wait(&emptyBuffLock);
+
+    sem_wait(&queueLock);
     if(!isQueueEmpty(queue)){
+        if(isQueueFull(queue)){
+            sem_post(&queueLock);
+        }
         nodeq = queue->front;
         queue->front = nodeq->previous;
         nodeq->previous = NULL;
 
         queue->cursize -= 1;
     }
+    sem_post(&queueLock);
+
+    sem_post(&fullBuffLock);
 
     char * msgToBuffer = NULL;
     char *msg = nodeq->msg;
@@ -157,15 +193,65 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
     return strlen(buf);
 }
 
+void initSemaphores(){
+    sem_init(&queueLock, 0, 1);
+    sem_init(&emptyBuffLock, 0, 0);
+    sem_init(&fullBuffLock, 0, 0);
+}
+
+void * consumer(void* args){
+    Queue *queue = (Queue*) args;
+
+    for (int i = 0; i < MESSAGES_NUMBER; ++i) {
+        char tempStr[100];
+        msgget(queue, tempStr, 100);
+        printf("%s", tempStr);
+    }
+
+    return NULL;
+}
+
+void * producer(void* args){
+    Info *info = (Info*) args;
+    Queue *queue = info->queue;
+
+    char msgPrefix[30];
+    sprintf(msgPrefix, "Producer %d Message: #", info->producerNumber);
+
+    for (int i = 0; i < MESSAGES_NUMBER; ++i) {
+        char numberBuffer[20];
+        char tempStr[100];
+        sprintf(numberBuffer, "%d\n", i);
+        strcpy(tempStr, msgPrefix);
+        strcat(tempStr, numberBuffer);
+//        printf("%s", tempStr);
+        msgput(queue, tempStr);
+    }
+
+}
+
 int main() {
+    pthread_t consumers[2];
+    pthread_t producers[2];
+
     Queue * queue = (Queue*) malloc(sizeof(Queue));
     if(queue == STATUS_MALLOC_FAIL){
         verifyFunctionsByErrno(STATUS_FAILURE, "malloc");
     }
-
     queueInit(queue);
 
-    msgput(queue, "hah");
+    Info infoProducer1 = {queue, 1};
+    Info infoProducer2 = {queue, 2};
+
+    verifyPthreadFunctions(pthread_create(&producers[0], NULL, producer, (void*) &infoProducer1), "pthread_create");
+//    verifyPthreadFunctions(pthread_create(&producers[1], NULL, producer, (void*) &infoProducer2), "pthread_create");
+    verifyPthreadFunctions(pthread_create(&consumers[0], NULL, consumer, (void*) queue), "pthread_create");
+//    verifyPthreadFunctions(pthread_create(&consumers[1], NULL, consumer, (void*) queue), "pthread_create");
+
+//    producer(&infoProducer1);
+//    producer(&infoProducer2);
+
+    /*msgput(queue, "hah");
     msgput(queue, "sdasas");
     msgput(queue, "hdfdfasd");
     msgput(queue, "hahasdsadsadfdfdfdsfdsf");
@@ -177,9 +263,9 @@ int main() {
         st = msgget(queue, buffer, MAX_STRING_LENGTH);
         fprintf(stdout, "%d, %s\n", st, buffer);
         fflush(stdout);
-    }
+    }*/
 
-    fprintf(stdout, "cs");
+//    queueDestroy(queue);
 
     pthread_exit(EXIT_SUCCESS);
 }
