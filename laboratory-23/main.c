@@ -5,7 +5,6 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <semaphore.h>
-#include <errno.h>
 #include "list.c"
 
 #define MAX_THREADS_NUMBER 100
@@ -18,33 +17,12 @@
 #define EXPAND_COEF 2
 #define SLEEP_COEF 1000000
 #define INPUT_HOLDER_INIT_SIZE 256
-#define SEM_START_VAL 1
-#define BUFFER_DEF_LENGTH 256
-
-char errorBuffer[256];
-
-sem_t semaphore;
+#define SEM_START_VAL 2
 
 typedef struct listInfo {
     List* list;
     char* string;
 } listInfo;
-
-void verifyFunctionsByErrno(int returnCode, const char *functionName) {
-    strerror_r(errno, errorBuffer, BUFFER_DEF_LENGTH);
-    if (returnCode < STATUS_SUCCESS) {
-        fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
-        pthread_exit(NULL);
-    }
-}
-
-void verifyPthreadFunctions(int returnCode, const char *functionName) {
-    strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
-    if (returnCode < STATUS_SUCCESS) {
-        fprintf(stderr, "Error %s: %s\n", functionName, errorBuffer);
-        pthread_exit(NULL);
-    }
-}
 
 int expandInputBuffer(char **inputHolder, size_t *bufferSize) {
     char *newInputHolder = NULL;
@@ -165,13 +143,10 @@ void *updateSortedStringsList(void *arg) {
 
     Node * node = createNode(string);
     if(node == NULL){
-        verifyFunctionsByErrno(sem_post(&semaphore), "sem_post");
         pthread_exit(NULL);
     }
 
-    verifyFunctionsByErrno(sem_wait(&semaphore), "sem_wait");
-        push(list, node);
-    verifyFunctionsByErrno(sem_post(&semaphore), "sem_post");
+    push(list, node);
 
     return NULL;
 }

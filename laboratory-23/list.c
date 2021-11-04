@@ -1,7 +1,8 @@
 #include <malloc.h>
 #include <string.h>
+#include "util.h"
 
-#define STATUS_FAIL -1
+#define STATUS_FAILURE -1
 #define STATUS_SUCCESS 0
 
 typedef struct Node{
@@ -40,18 +41,34 @@ Node* createNode(char* string){
     return node;
 }
 
+void freeNode(Node* node){
+    free(node->stringValue);
+    free(node);
+    node = NULL;
+}
+
+void freeList(List* list){
+    Node *current = list->head;
+    while (current) {
+        Node *temp = current;
+        current = current->next;
+        freeNode(temp);
+    }
+    list = NULL;
+}
+
 int push(List* list, Node* node){
 
     if(node == NULL){
         fprintf(stderr, "Invalid node\n");
-        free(list);
-        return STATUS_FAIL;
+        return STATUS_FAILURE;
     }
 
+    verifyFunctionsByErrno(sem_wait(&semaphore), "sem_wait");
     if(list == NULL){
         fprintf(stderr, "Invalid list\n");
-        free(node);
-        return STATUS_FAIL;
+        freeNode(node);
+        return STATUS_FAILURE;
     }
 
     if(list->head == NULL){
@@ -63,6 +80,7 @@ int push(List* list, Node* node){
     node->next = list->head;
     list->head = node;
     list->length += 1;
+    verifyFunctionsByErrno(sem_post(&semaphore), "sem_post");
 
     return STATUS_SUCCESS;
 }
@@ -86,20 +104,4 @@ void printList(List* list){
     }
 
     printf("List length %d.", list->length);
-}
-
-void freeNode(Node* node){
-    free(node->stringValue);
-    free(node);
-    node = NULL;
-}
-
-void freeList(List* list){
-    Node *current = list->head;
-    while (current) {
-        Node *temp = current;
-        current = current->next;
-        freeNode(temp);
-    }
-    list = NULL;
 }
