@@ -17,7 +17,7 @@
 #define EXPAND_COEF 2
 #define SLEEP_COEF 1000000
 #define INPUT_HOLDER_INIT_SIZE 256
-#define SEM_START_VAL 2
+#define SEM_START_VAL 1
 
 typedef struct listInfo {
     List* list;

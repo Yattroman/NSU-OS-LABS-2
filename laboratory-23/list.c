@@ -64,19 +64,13 @@ int push(List* list, Node* node){
         return STATUS_FAILURE;
     }
 
-    verifyFunctionsByErrno(sem_wait(&semaphore), "sem_wait");
     if(list == NULL){
         fprintf(stderr, "Invalid list\n");
         freeNode(node);
         return STATUS_FAILURE;
     }
 
-    if(list->head == NULL){
-        list->head = node;
-        list->length += 1;
-        return STATUS_SUCCESS;
-    }
-
+    verifyFunctionsByErrno(sem_wait(&semaphore), "sem_wait");
     node->next = list->head;
     list->head = node;
     list->length += 1;
