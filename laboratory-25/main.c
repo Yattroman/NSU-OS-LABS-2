@@ -18,7 +18,8 @@
 #define ENDLINE_CHARACTER '\0'
 #define MESSAGES_NUMBER 20
 
-sem_t queueLock, emptyBuffLock, fullBuffLock;
+sem_t emptyBuffLock, fullBuffLock;
+pthread_mutex_t queueLock = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct NodeQ {
     char *msg;
@@ -129,10 +130,12 @@ int msgput(Queue *queue, char *msg) {
         return STATUS_FAILURE;
     }
 
-    sem_wait(&queueLock);
+    sem_wait(&emptyBuffLock);
+
+    verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
     if(!isQueueFull(queue)){
         if(isQueueEmpty(queue)){
-            sem_post(&queueLock);
+            verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
         }
         if(queue->front == NULL && queue->rear == NULL){
             queue->rear = nodeq;
@@ -145,9 +148,9 @@ int msgput(Queue *queue, char *msg) {
 
         queue->cursize += 1;
     }
-    sem_post(&queueLock);
+    verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
 
-    sem_post(&emptyBuffLock);
+    sem_post(&fullBuffLock);
 
     return strlen(msgToNode);
 }
@@ -162,12 +165,12 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
 
     NodeQ *nodeq = NULL;
 
-    sem_wait(&emptyBuffLock);
+    sem_wait(&fullBuffLock);
 
-    sem_wait(&queueLock);
+    verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
     if(!isQueueEmpty(queue)){
         if(isQueueFull(queue)){
-            sem_post(&queueLock);
+            verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
         }
         nodeq = queue->front;
         queue->front = nodeq->previous;
@@ -175,15 +178,15 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
 
         queue->cursize -= 1;
     }
-    sem_post(&queueLock);
+    verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
 
-    sem_post(&fullBuffLock);
+    sem_post(&emptyBuffLock);
 
     char * msgToBuffer = NULL;
     char *msg = nodeq->msg;
 
     // clear buffer
-    memset(buf, '\n', bufsize);
+    memset(buf, '\0', bufsize);
     memcpy(buf, msg, sizeof(char)*bufsize);
 
     if(strlen(msg) > bufsize){
@@ -194,8 +197,7 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
 }
 
 void initSemaphores(){
-    sem_init(&queueLock, 0, 1);
-    sem_init(&emptyBuffLock, 0, 0);
+    sem_init(&emptyBuffLock, 0, 1);
     sem_init(&fullBuffLock, 0, 0);
 }
 
@@ -231,8 +233,8 @@ void * producer(void* args){
 }
 
 int main() {
-    pthread_t consumers[2];
-    pthread_t producers[2];
+    pthread_t consumers[3];
+    pthread_t producers[3];
 
     Queue * queue = (Queue*) malloc(sizeof(Queue));
     if(queue == STATUS_MALLOC_FAIL){
@@ -242,26 +244,21 @@ int main() {
 
     Info infoProducer1 = {queue, 1};
     Info infoProducer2 = {queue, 2};
+    Info infoProducer3 = {queue, 3};
 
     verifyPthreadFunctions(pthread_create(&producers[0], NULL, producer, (void*) &infoProducer1), "pthread_create");
 //    verifyPthreadFunctions(pthread_create(&producers[1], NULL, producer, (void*) &infoProducer2), "pthread_create");
+//    verifyPthreadFunctions(pthread_create(&producers[2], NULL, producer, (void*) &infoProducer3), "pthread_create");
     verifyPthreadFunctions(pthread_create(&consumers[0], NULL, consumer, (void*) queue), "pthread_create");
 //    verifyPthreadFunctions(pthread_create(&consumers[1], NULL, consumer, (void*) queue), "pthread_create");
+    pthread_join(producers[0], NULL);
 
-//    producer(&infoProducer1);
-//    producer(&infoProducer2);
-
-    /*msgput(queue, "hah");
-    msgput(queue, "sdasas");
-    msgput(queue, "hdfdfasd");
-    msgput(queue, "hahasdsadsadfdfdfdsfdsf");
-
-    char* buffer = (char*) malloc(sizeof(char)*MAX_STRING_LENGTH + 1);
+    /*char* buffer = (char*) malloc(sizeof(char)*MAX_STRING_LENGTH + 1);
     int st;
 
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < MAX_STRING_LENGTH; ++i) {
         st = msgget(queue, buffer, MAX_STRING_LENGTH);
-        fprintf(stdout, "%d, %s\n", st, buffer);
+        fprintf(stdout, "%d, %s", st, buffer);
         fflush(stdout);
     }*/
 

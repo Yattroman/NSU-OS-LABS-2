@@ -126,19 +126,19 @@ void *moduleCreator(void *args){
             continue;
         }
 
-        verifyFunctionsByErrno(sem_wait(&module), "sem_wait");
-
-        *modulesCount = *modulesCount + 1;
         *detailsACount = *detailsACount - 1;
         *detailsBCount = *detailsBCount - 1;
-        fprintf(stdout,"-> Module created! Total: %d. Left: %d details A, %d details B\n", *modulesCount, *detailsACount, *detailsBCount);
-        fflush(stdout);
-
-        verifyFunctionsByErrno(sem_post(&module), "sem_post");
 
         verifyFunctionsByErrno(sem_post(&detB), "sem_post");
         verifyFunctionsByErrno(sem_post(&detA), "sem_post");
 
+        verifyFunctionsByErrno(sem_wait(&module), "sem_wait");
+
+        *modulesCount = *modulesCount + 1;
+        fprintf(stdout,"-> Module created! Total: %d. Left: %d details A, %d details B\n", *modulesCount, *detailsACount, *detailsBCount);
+        fflush(stdout);
+
+        verifyFunctionsByErrno(sem_post(&module), "sem_post");
     }
 
     return NULL;
@@ -163,19 +163,20 @@ void *widgetCreator(void *args){
             continue;
         }
 
-        *widgetsCount = *widgetsCount + 1;
         *modulesCount = *modulesCount - 1;
         *detailsCCount = *detailsCCount - 1;
-
-        if(*widgetsCount > WIDGETS_MAX){
-            executionStatus = STOP;
-        }
 
         fprintf(stdout,"--> Widget created! Total: %d. Left: %d modules, %d details C\n", *widgetsCount, *modulesCount, *detailsCCount);
         fflush(stdout);
 
         verifyFunctionsByErrno(sem_post(&module), "sem_post");
         verifyFunctionsByErrno(sem_post(&detC), "sem_post");
+
+        if(*widgetsCount > WIDGETS_MAX){
+            executionStatus = STOP;
+        }
+
+        *widgetsCount = *widgetsCount + 1;
 
     }
 
