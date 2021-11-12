@@ -18,7 +18,7 @@
 #define NO_ACTIONS 0
 #define BUFFER_DEF_LENGTH 256
 
-#define MIN_REQ_ARGS_NUMBER 3
+#define MIN_REQ_ARGS_NUMBER 4
 #define DEF_PROTOCOL 0
 #define BACKLOG  500
 #define TIMEOUT  3000
@@ -89,14 +89,15 @@ void initSignal(){
 }
 
 void initArguments(int argc, char** argv){
+
     if(argc < MIN_REQ_ARGS_NUMBER){
         printf("not enough arguments entered, usage: <server_port> <receiver_ip> <receiver_port>\n");
         pthread_exit(NULL);
     }
 
-    serverPort = atoi(argv[0]);
-    memcpy(receiverIp, argv[1], sizeof(char)*(strlen(argv[1]+1)));
-    receiverPort = atoi(argv[2]);
+    serverPort = atoi(argv[1]);
+    receiverIp = argv[2];
+    receiverPort = atoi(argv[3]);
 
 }
 
@@ -152,6 +153,7 @@ int spinConnection(int clientSocket, int receiverSocket) {
         }
     }
 
+    return STATUS_SUCCESS;
 }
 
 void *connectionBody(void* socket){
@@ -210,7 +212,7 @@ int main(int argc, char** argv){
     initArguments(argc, argv);
     initSignal();
 
-    if(initServer(&serverSocket)){
+    if(initServer(&serverSocket) == STATUS_SUCCESS){
         spinServer(serverSocket);
     }
 
