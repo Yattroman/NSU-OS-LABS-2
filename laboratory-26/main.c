@@ -22,6 +22,7 @@
 #define PRODUCERS_NUMBER 3
 #define MSGS_TASK_NUMBER 40
 #define TRUE 40
+#define DROPPED_STATE 0
 
 pthread_mutex_t msgLock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -51,7 +52,7 @@ typedef struct Info {
 } Info;
 
 char errorBuffer[256];
-int workIsDoneFlag = 0;
+int isDropped = 0;
 
 void verifyPthreadFunctions(int returnCode, const char *functionName) {
     strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
@@ -82,7 +83,7 @@ char *prepareMsgToNode(char *msg) {
 
 int isQueueEmpty(Queue *queue) {
     verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
-    int result = (queue->cursize == EMPTY) ? YES : NO;
+    int result = (queue->cursize == EMPTY && queue->front == NULL) ? YES : NO;
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
     return result;
 }
@@ -132,33 +133,31 @@ void queueDestroy(Queue *queue) {
 
 int areAllMsgsGot() {
     int result = (msgsGot == MSGS_TASK_NUMBER) ? YES : NO;
-    fprintf(stdout, "[%d] result - %d\n", msgsGot, result);
     return result;
+}
+
+void msgdrop() {
+    isDropped = YES;
+    verifyPthreadFunctions(pthread_cond_broadcast(&notEmptyQueueCV), "pthread_cond_broadcast");
+    verifyPthreadFunctions(pthread_cond_broadcast(&notFullQueueCV), "pthread_cond_broadcast");
 }
 
 void incrementMsgsGot() {
     verifyPthreadFunctions(pthread_mutex_lock(&msgLock), "pthread_mutex_lock");
     if (areAllMsgsGot()) {
-        workIsDoneFlag = YES;
+        msgdrop();
+        verifyPthreadFunctions(pthread_mutex_unlock(&msgLock), "pthread_mutex_unlock");
         return;
     }
     msgsGot += 1;
     verifyPthreadFunctions(pthread_mutex_unlock(&msgLock), "pthread_mutex_unlock");
 }
 
-int isWorkDone(){
-    verifyPthreadFunctions(pthread_mutex_lock(&msgLock), "pthread_mutex_lock");
-    int result = workIsDoneFlag;
-    verifyPthreadFunctions(pthread_mutex_unlock(&msgLock), "pthread_mutex_unlock");
-    return result;
-}
-
-void msqdrop(Queue *queue) {
-    verifyPthreadFunctions(pthread_cond_broadcast(&notEmptyQueueCV), "pthread_cond_broadcast");
-    verifyPthreadFunctions(pthread_cond_broadcast(&notFullQueueCV), "pthread_cond_broadcast");
-}
-
 int msgput(Queue *queue, char *msg) {
+    if(isDropped){
+        return DROPPED_STATE;
+    }
+
     char *msgToNode = prepareMsgToNode(msg);
     if (msgToNode == STATUS_FAILURE_MEM || queue == NULL) {
         return STATUS_FAILURE;
@@ -173,9 +172,12 @@ int msgput(Queue *queue, char *msg) {
     if (isQueueFull(queue)) {
         fprintf(stdout, "Queue is full!\n");
         fflush(stdout);
-        while (isQueueFull(queue)) {
+        while (isQueueFull(queue) && !isDropped) {
             verifyPthreadFunctions(pthread_cond_wait(&notFullQueueCV, &notFullQueueLock), "pthread_cond_wait");
         }
+    }
+    if(isDropped){
+        return DROPPED_STATE;
     }
     verifyPthreadFunctions(pthread_mutex_unlock(&notFullQueueLock), "pthread_mutex_unlock");
 
@@ -200,6 +202,9 @@ int msgput(Queue *queue, char *msg) {
 }
 
 int msgget(Queue *queue, char *buf, size_t bufsize) {
+    if(isDropped){
+        return DROPPED_STATE;
+    }
     if (queue == NULL) {
         return STATUS_FAILURE;
     }
@@ -210,9 +215,12 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
     if (isQueueEmpty(queue)) {
         fprintf(stdout, "Queue is empty!\n");
         fflush(stdout);
-        while (isQueueEmpty(queue)) {
+        while (isQueueEmpty(queue) && !isDropped) {
             verifyPthreadFunctions(pthread_cond_wait(&notEmptyQueueCV, &notEmptyQueueLock), "pthread_cond_wait");
         }
+    }
+    if(isDropped){
+        return DROPPED_STATE;
     }
     verifyPthreadFunctions(pthread_mutex_unlock(&notEmptyQueueLock), "pthread_mutex_unlock");
 
@@ -254,17 +262,14 @@ void *consumer(void *args) {
     int i = 1;
 
     do {
-//        sleep(1);
+        sleep(1);
         incrementMsgsGot();
-        if(isWorkDone()){
-            fprintf(stdout,"Thread: %lu", pthread_self());
-            fflush(stdout);
-            break;
-        }
         status = msgget(queue, buffer, bufferSize);
         if (status == STATUS_FAILURE) {
             fprintf(stdout, "[Error] msgget\n");
             fflush(stdout);
+        } else if(status == DROPPED_STATE){
+            break;
         }
         printf("i: %d | %s", i++, buffer);
     } while (TRUE);
@@ -295,6 +300,8 @@ void *producer(void *args) {
         if (status == STATUS_FAILURE) {
             fprintf(stdout, "[Error] msgput!\n");
             fflush(stdout);
+        } else if(status == DROPPED_STATE){
+            break;
         }
     }
 

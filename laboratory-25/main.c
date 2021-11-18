@@ -18,9 +18,19 @@
 #define MAX_STRING_LENGTH 80
 #define ENDLINE_CHARACTER '\0'
 #define MESSAGES_NUMBER 20
+#define CONSUMERS_NUMBER 2
+#define PRODUCERS_NUMBER 3
+#define MSGS_TASK_NUMBER 40
+#define TRUE 40
+#define DROPPED_STATE 0
 
-sem_t emptyBuffLock, fullBuffLock;
+pthread_mutex_t msgLock = PTHREAD_MUTEX_INITIALIZER;
+
 pthread_mutex_t queueLock = PTHREAD_MUTEX_INITIALIZER;
+sem_t fullBuffLock;
+sem_t emptyBuffLock;
+
+int msgsGot = 0;
 
 typedef struct NodeQ {
     char *msg;
@@ -36,10 +46,11 @@ typedef struct Queue {
 
 typedef struct Info {
     Queue *queue;
-    int producerNumber;
+    int number;
 } Info;
 
 char errorBuffer[256];
+int isDropped = 0;
 
 void verifyPthreadFunctions(int returnCode, const char *functionName) {
     strerror_r(returnCode, errorBuffer, BUFFER_DEF_LENGTH);
@@ -57,28 +68,34 @@ void verifyFunctionsByErrno(int returnCode, const char *functionName) {
     }
 }
 
-char *prepareMsgToNode(char * msg){
-    char * msgToNode = (char*) malloc(sizeof(char)*MAX_STRING_LENGTH + 1);
-    if(msgToNode == STATUS_MALLOC_FAIL){
+char *prepareMsgToNode(char *msg) {
+    char *msgToNode = (char *) malloc(sizeof(char) * MAX_STRING_LENGTH + 1);
+    if (msgToNode == STATUS_MALLOC_FAIL) {
         return STATUS_FAILURE_MEM;
     }
-    memcpy(msgToNode, msg, sizeof(char)*MAX_STRING_LENGTH);
+    memcpy(msgToNode, msg, sizeof(char) * MAX_STRING_LENGTH);
     msgToNode[MAX_STRING_LENGTH] = ENDLINE_CHARACTER;
 
     return msgToNode;
 }
 
-int isQueueEmpty(Queue* queue){
-    return (queue->cursize == EMPTY) ? YES : NO;
+int isQueueEmpty(Queue *queue) {
+    verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
+    int result = (queue->cursize == EMPTY && queue->front == NULL) ? YES : NO;
+    verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
+    return result;
 }
 
-int isQueueFull(Queue* queue){
-    return (queue->cursize == queue->capacity) ? YES : NO;
+int isQueueFull(Queue *queue) {
+    verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
+    int result = (queue->cursize == queue->capacity) ? YES : NO;
+    verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
+    return result;
 }
 
-NodeQ * createNodeQ(char* msg){
-    NodeQ *node = (NodeQ*) malloc(sizeof(NodeQ));
-    if(node == STATUS_MALLOC_FAIL){
+NodeQ *createNodeQ(char *msg) {
+    NodeQ *node = (NodeQ *) malloc(sizeof(NodeQ));
+    if (node == STATUS_MALLOC_FAIL) {
         return STATUS_FAILURE_MEM;
     }
 
@@ -95,16 +112,15 @@ void queueInit(Queue *queue) {
     queue->rear = NULL;
 }
 
-void nodeDestroy(NodeQ *nodeq){
+void nodeDestroy(NodeQ *nodeq) {
     free(nodeq->msg);
     free(nodeq);
     nodeq = NULL;
 }
 
-// msqdestroy должна вызываться после того, как будет известно, что ни одна нить больше не попытается выполнять операции над очередью.
 void queueDestroy(Queue *queue) {
-    NodeQ* current = queue->front;
-    while (current){
+    NodeQ *current = queue->front;
+    while (current) {
         NodeQ *temp = current;
         current = current->previous;
         nodeDestroy(temp);
@@ -113,146 +129,214 @@ void queueDestroy(Queue *queue) {
     queue = NULL;
 }
 
-// msgdrop unlock waiting operations get and put
-void msqdrop(Queue *queue) {
+void initSemaphores() {
+    sem_init(&emptyBuffLock, 0, 0);
+    sem_init(&fullBuffLock, 0, 0);
+}
+
+int areAllMsgsGot() {
+    int result = (msgsGot == MSGS_TASK_NUMBER) ? YES : NO;
+    return result;
+}
+
+void msgdrop() {
+    isDropped = YES;
     sem_post(&fullBuffLock);
     sem_post(&emptyBuffLock);
 }
 
-// msgput принимает в качестве параметра ASCIIZ строку символов, обрезает ее до 80 символов (если это необходимо) и помещает ее в очередь.
-// if queue is full (10 strings) - msgput locks
-// funtion return count of send symbols
+void incrementMsgsGot() {
+    verifyPthreadFunctions(pthread_mutex_lock(&msgLock), "pthread_mutex_lock");
+    if (areAllMsgsGot()) {
+        msgdrop();
+        verifyPthreadFunctions(pthread_mutex_unlock(&msgLock), "pthread_mutex_unlock");
+        return;
+    }
+    msgsGot += 1;
+    verifyPthreadFunctions(pthread_mutex_unlock(&msgLock), "pthread_mutex_unlock");
+}
+
 int msgput(Queue *queue, char *msg) {
+    if (isDropped) {
+        return DROPPED_STATE;
+    }
 
     char *msgToNode = prepareMsgToNode(msg);
-    if(msgToNode == STATUS_FAILURE_MEM || queue == NULL){
+    if (msgToNode == STATUS_FAILURE_MEM || queue == NULL) {
         return STATUS_FAILURE;
     }
 
     NodeQ *nodeq = createNodeQ(msgToNode);
-    if(nodeq == STATUS_FAILURE_MEM){
+    if (nodeq == STATUS_FAILURE_MEM) {
         return STATUS_FAILURE;
     }
 
-    if(isQueueFull(queue)){
+    if (isQueueFull(queue) && !isDropped) {
         fprintf(stdout, "Queue is full!\n");
         fflush(stdout);
-        sem_wait(&emptyBuffLock);
+        sem_wait(&fullBuffLock);
+    }
+
+    if (isDropped) {
+        return DROPPED_STATE;
     }
 
     verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
 
-    if(queue->front == NULL && queue->rear == NULL){
+    if (queue->front == NULL) {
         queue->front = nodeq;
+    }
+    if (queue->rear == NULL) {
         queue->rear = nodeq;
     }
+
     queue->rear->previous = nodeq;
     queue->rear = nodeq;
     queue->cursize += 1;
 
+    // Notify that msg has been put into queue, and it isn't empty now
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
 
     int value;
-    sem_getvalue(&fullBuffLock, &value);
-    if(value != 1){
-        sem_post(&fullBuffLock);
+    sem_getvalue(&emptyBuffLock, &value);
+    if (value < 1) {
+        sem_post(&emptyBuffLock);
     }
 
-    return strlen(msgToNode);
+    return strlen(nodeq->msg);
 }
 
-// msgget return first string from queue, trimmed to size of user buffer (if it necessary)
-// if queue is empty - msgget locks
-// funtion return count of read symbols
 int msgget(Queue *queue, char *buf, size_t bufsize) {
-    if(queue == NULL){
+    if (isDropped) {
+        return DROPPED_STATE;
+    }
+    if (queue == NULL) {
         return STATUS_FAILURE;
     }
-    NodeQ * nodeq = NULL;
 
-    if(isQueueEmpty(queue)){
+    NodeQ *nodeq = NULL;
+
+    if (isQueueEmpty(queue) && !isDropped) {
         fprintf(stdout, "Queue is empty!\n");
         fflush(stdout);
-        sem_wait(&fullBuffLock);
+        sem_wait(&emptyBuffLock);
     }
-    
+
+    if (isDropped) {
+        return DROPPED_STATE;
+    }
+
     verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
 
     nodeq = queue->front;
     queue->front = nodeq->previous;
     queue->cursize -= 1;
     nodeq->previous = NULL;
-    nodeDestroy(nodeq);
 
+    // Notify that msg has been taken from queue, and it isn't full now
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
 
     int value;
     sem_getvalue(&fullBuffLock, &value);
-    if(value != 1){
-        sem_post(&emptyBuffLock);
+    if (value < 1) {
+        sem_post(&fullBuffLock);
     }
 
     // clear buffer
     memset(buf, '\0', bufsize);
-    memcpy(buf, nodeq->msg, sizeof(char)*strlen(nodeq->msg));
+    memcpy(buf, nodeq->msg, sizeof(char) * strlen(nodeq->msg));
 
-    if(strlen(nodeq->msg) > bufsize){
-        buf[bufsize-1] = ENDLINE_CHARACTER;
+    if (strlen(nodeq->msg) >= bufsize) {
+        buf[bufsize - 1] = ENDLINE_CHARACTER;
     }
+
+    nodeDestroy(nodeq);
 
     return strlen(buf);
 }
 
-void initSemaphores(){
-    sem_init(&emptyBuffLock, 0, 1);
-    sem_init(&fullBuffLock, 0, 0);
-}
+void *consumer(void *args) {
+    Info *info = (Info *) args;
+    Queue *queue = info->queue;
 
-void * consumer(void* args){
-    Queue *queue = (Queue*) args;
+    int status;
+    char msgPrefix[30];
+    sprintf(msgPrefix, "Consumer %d | ", info->number);
 
-    for (int i = 0; i < MESSAGES_NUMBER*2; ++i) {
-        char tempStr[100];
-//        sleep(2);
-        msgget(queue, tempStr, 100);
-        printf("%s", tempStr);
-    }
+    int bufferSize = 100;
+    char *buffer = (char *) malloc(sizeof(char) * bufferSize);
+
+    int i = 1;
+
+    do {
+//        sleep(1);
+        incrementMsgsGot();
+        status = msgget(queue, buffer, bufferSize);
+        if (status == STATUS_FAILURE) {
+            fprintf(stdout, "[Error] msgget\n");
+            fflush(stdout);
+        } else if (status == DROPPED_STATE) {
+            break;
+        }
+        printf("i: %d | %s", i++, buffer);
+    } while (TRUE);
+
+    free(buffer);
+    free(info);
 
     return NULL;
 }
 
-void * producer(void* args){
-    Info *info = (Info*) args;
+void *producer(void *args) {
+    Info *info = (Info *) args;
     Queue *queue = info->queue;
 
+    int status;
     char msgPrefix[30];
-    sprintf(msgPrefix, "Producer %d Message: #", info->producerNumber);
+    sprintf(msgPrefix, "Producer %d Message: #", info->number);
 
-    for (int i = 0; i < MESSAGES_NUMBER; ++i) {
+    int i;
+    for (i = 0; i < MESSAGES_NUMBER; ++i) {
         char numberBuffer[20];
         char tempStr[100];
-//        sleep(2);
+//        sleep(1);
         sprintf(numberBuffer, "%d\n", i);
         strcpy(tempStr, msgPrefix);
         strcat(tempStr, numberBuffer);
-//        printf("%s", tempStr);
-        msgput(queue, tempStr);
+        status = msgput(queue, tempStr);
+        if (status == STATUS_FAILURE) {
+            fprintf(stdout, "[Error] msgput!\n");
+            fflush(stdout);
+        } else if (status == DROPPED_STATE) {
+            break;
+        }
     }
+
+    free(info);
 
     return NULL;
 }
 
-void startExperiment(pthread_t *consumers, pthread_t *producers, Queue *queue){
-    Info infoProducer1 = {queue, 1};
-    Info infoProducer2 = {queue, 2};
+Info *prepareInfoForExperiment(Queue *queue, int number) {
+    Info *info = (Info *) malloc(sizeof(Info));
 
-    verifyPthreadFunctions(pthread_create(&producers[0], NULL, producer, (void*) &infoProducer1), "pthread_create");
-    verifyPthreadFunctions(pthread_create(&producers[1], NULL, producer, (void*) &infoProducer2), "pthread_create");
-    verifyPthreadFunctions(pthread_create(&consumers[0], NULL, consumer, (void*) queue), "pthread_create");
-    verifyPthreadFunctions(pthread_create(&consumers[1], NULL, consumer, (void*) queue), "pthread_create");
+    info->queue = queue;
+    info->number = number;
+
+    return info;
 }
 
-void endExperiment(pthread_t *consumers, pthread_t *producers){
+void startExperiment(pthread_t *consumers, pthread_t *producers, Queue *queue) {
+    Info *info1 = prepareInfoForExperiment(queue, 1);
+    Info *info2 = prepareInfoForExperiment(queue, 2);
+
+    verifyPthreadFunctions(pthread_create(&producers[0], NULL, producer, (void *) info1), "pthread_create");
+    verifyPthreadFunctions(pthread_create(&producers[1], NULL, producer, (void *) info2), "pthread_create");
+    verifyPthreadFunctions(pthread_create(&consumers[0], NULL, consumer, (void *) info1), "pthread_create");
+    verifyPthreadFunctions(pthread_create(&consumers[1], NULL, consumer, (void *) info2), "pthread_create");
+}
+
+void endExperiment(pthread_t *consumers, pthread_t *producers) {
     verifyPthreadFunctions(pthread_join(producers[0], NULL), "pthread_join");
     verifyPthreadFunctions(pthread_join(producers[1], NULL), "pthread_join");
     verifyPthreadFunctions(pthread_join(consumers[0], NULL), "pthread_join");
@@ -260,29 +344,20 @@ void endExperiment(pthread_t *consumers, pthread_t *producers){
 }
 
 int main() {
-    pthread_t consumers[2];
-    pthread_t producers[2];
+    pthread_t consumers[CONSUMERS_NUMBER];
+    pthread_t producers[PRODUCERS_NUMBER];
 
-    Queue * queue = (Queue*) malloc(sizeof(Queue));
-    if(queue == STATUS_MALLOC_FAIL){
+    Queue *queue = (Queue *) malloc(sizeof(Queue));
+    if (queue == STATUS_MALLOC_FAIL) {
         verifyFunctionsByErrno(STATUS_FAILURE, "malloc");
     }
 
-    queueInit(queue);
     initSemaphores();
+    queueInit(queue);
     startExperiment(consumers, producers, queue);
-
-    /*char* buffer = (char*) malloc(sizeof(char)*MAX_STRING_LENGTH + 1);
-    int st;
-
-    for (int i = 0; i < MESSAGES_NUMBER; ++i) {
-        st = msgget(queue, buffer, MAX_STRING_LENGTH);
-        fprintf(stdout, "%d, %s", st, buffer);
-        fflush(stdout);
-    }*/
-
     endExperiment(consumers, producers);
     queueDestroy(queue);
 
     pthread_exit(EXIT_SUCCESS);
 }
+
