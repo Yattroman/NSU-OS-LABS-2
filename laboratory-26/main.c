@@ -179,7 +179,6 @@ int msgput(Queue *queue, char *msg) {
     if(isDropped){
         return DROPPED_STATE;
     }
-    verifyPthreadFunctions(pthread_mutex_unlock(&notFullQueueLock), "pthread_mutex_unlock");
 
     verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
 
@@ -198,6 +197,7 @@ int msgput(Queue *queue, char *msg) {
     // Notify that msg has been put into queue, and it isn't empty now
     verifyPthreadFunctions(pthread_cond_signal(&notEmptyQueueCV), "pthread_cond_broadcast");
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
+    verifyPthreadFunctions(pthread_mutex_unlock(&notFullQueueLock), "pthread_mutex_unlock");
 
     return strlen(nodeq->msg);
 }
@@ -223,7 +223,6 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
     if(isDropped){
         return DROPPED_STATE;
     }
-    verifyPthreadFunctions(pthread_mutex_unlock(&notEmptyQueueLock), "pthread_mutex_unlock");
 
     verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
 
@@ -237,6 +236,7 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
     // Notify that msg has been taken from queue, and it isn't full now
     verifyPthreadFunctions(pthread_cond_signal(&notFullQueueCV), "pthread_cond_broadcast");
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
+    verifyPthreadFunctions(pthread_mutex_unlock(&notEmptyQueueLock), "pthread_mutex_unlock");
 
     // clear buffer
     memset(buf, '\0', bufsize);
