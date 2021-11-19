@@ -27,8 +27,8 @@
 pthread_mutex_t msgLock = PTHREAD_MUTEX_INITIALIZER;
 
 pthread_mutex_t queueLock = PTHREAD_MUTEX_INITIALIZER;
-sem_t fullBuffLock;
-sem_t emptyBuffLock;
+sem_t fullSlots;
+sem_t emptySlots;
 
 int msgsGot = 0;
 
@@ -129,9 +129,9 @@ void queueDestroy(Queue *queue) {
     queue = NULL;
 }
 
-void initSemaphores() {
-    sem_init(&emptyBuffLock, 0, 0);
-    sem_init(&fullBuffLock, 0, 0);
+void initSemaphores(Queue * queue) {
+    sem_init(&emptySlots, 0, queue->capacity);
+    sem_init(&fullSlots, 0, 0);
 }
 
 int areAllMsgsGot() {
@@ -141,8 +141,8 @@ int areAllMsgsGot() {
 
 void msgdrop() {
     isDropped = YES;
-    sem_post(&fullBuffLock);
-    sem_post(&emptyBuffLock);
+    sem_post(&fullSlots);
+    sem_post(&emptySlots);
 }
 
 void incrementMsgsGot() {
@@ -174,8 +174,9 @@ int msgput(Queue *queue, char *msg) {
     if (isQueueFull(queue) && !isDropped) {
         fprintf(stdout, "Queue is full!\n");
         fflush(stdout);
-        sem_wait(&fullBuffLock);
     }
+
+    sem_wait(&emptySlots);
 
     if (isDropped) {
         return DROPPED_STATE;
@@ -197,11 +198,7 @@ int msgput(Queue *queue, char *msg) {
     // Notify that msg has been put into queue, and it isn't empty now
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
 
-    int value;
-    sem_getvalue(&emptyBuffLock, &value);
-    if (value < 1) {
-        sem_post(&emptyBuffLock);
-    }
+    sem_post(&fullSlots);
 
     return strlen(nodeq->msg);
 }
@@ -219,8 +216,9 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
     if (isQueueEmpty(queue) && !isDropped) {
         fprintf(stdout, "Queue is empty!\n");
         fflush(stdout);
-        sem_wait(&emptyBuffLock);
     }
+
+    sem_wait(&fullSlots);
 
     if (isDropped) {
         return DROPPED_STATE;
@@ -236,11 +234,7 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
     // Notify that msg has been taken from queue, and it isn't full now
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
 
-    int value;
-    sem_getvalue(&fullBuffLock, &value);
-    if (value < 1) {
-        sem_post(&fullBuffLock);
-    }
+    sem_post(&emptySlots);
 
     // clear buffer
     memset(buf, '\0', bufsize);
@@ -329,6 +323,7 @@ Info *prepareInfoForExperiment(Queue *queue, int number) {
 void startExperiment(pthread_t *consumers, pthread_t *producers, Queue *queue) {
     Info *info1 = prepareInfoForExperiment(queue, 1);
     Info *info2 = prepareInfoForExperiment(queue, 2);
+    initSemaphores(queue);
 
     verifyPthreadFunctions(pthread_create(&producers[0], NULL, producer, (void *) info1), "pthread_create");
     verifyPthreadFunctions(pthread_create(&producers[1], NULL, producer, (void *) info2), "pthread_create");
@@ -352,7 +347,6 @@ int main() {
         verifyFunctionsByErrno(STATUS_FAILURE, "malloc");
     }
 
-    initSemaphores();
     queueInit(queue);
     startExperiment(consumers, producers, queue);
     endExperiment(consumers, producers);
