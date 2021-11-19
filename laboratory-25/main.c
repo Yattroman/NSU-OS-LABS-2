@@ -189,10 +189,11 @@ int msgput(Queue *queue, char *msg) {
     }
     if (queue->rear == NULL) {
         queue->rear = nodeq;
+    } else {
+        queue->rear->previous = nodeq;
+        queue->rear = nodeq;
     }
 
-    queue->rear->previous = nodeq;
-    queue->rear = nodeq;
     queue->cursize += 1;
 
     // Notify that msg has been put into queue, and it isn't empty now
@@ -226,10 +227,18 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
 
     verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
 
+    if(queue->front->previous == NULL){
+        fprintf(stdout, "Attention, dangerous  situation!\n");
+        fflush(stdout);
+        queue->rear = NULL;
+    }
+
     nodeq = queue->front;
     queue->front = nodeq->previous;
+    if (queue->front == NULL){
+        queue->rear = NULL;
+    }
     queue->cursize -= 1;
-    nodeq->previous = NULL;
 
     // Notify that msg has been taken from queue, and it isn't full now
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");

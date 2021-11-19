@@ -8,7 +8,7 @@
 
 #define YES 1
 #define NO 0
-#define STATUS_FAILURE -1
+#define STATUS_FAILURE (-1)
 #define STATUS_FAILURE_MEM NULL
 #define STATUS_SUCCESS 0
 #define BUFFER_DEF_LENGTH 256
@@ -83,7 +83,7 @@ char *prepareMsgToNode(char *msg) {
 
 int isQueueEmpty(Queue *queue) {
     verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
-    int result = (queue->cursize == EMPTY && queue->front == NULL) ? YES : NO;
+    int result = (queue->cursize == EMPTY) ? YES : NO;
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
     return result;
 }
@@ -188,14 +188,15 @@ int msgput(Queue *queue, char *msg) {
     }
     if (queue->rear == NULL) {
         queue->rear = nodeq;
+    } else {
+        queue->rear->previous = nodeq;
+        queue->rear = nodeq;
     }
 
-    queue->rear->previous = nodeq;
-    queue->rear = nodeq;
     queue->cursize += 1;
 
     // Notify that msg has been put into queue, and it isn't empty now
-    verifyPthreadFunctions(pthread_cond_broadcast(&notEmptyQueueCV), "pthread_cond_broadcast");
+    verifyPthreadFunctions(pthread_cond_signal(&notEmptyQueueCV), "pthread_cond_broadcast");
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
 
     return strlen(nodeq->msg);
@@ -228,11 +229,13 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
 
     nodeq = queue->front;
     queue->front = nodeq->previous;
+    if (queue->front == NULL){
+        queue->rear = NULL;
+    }
     queue->cursize -= 1;
-    nodeq->previous = NULL;
 
     // Notify that msg has been taken from queue, and it isn't full now
-    verifyPthreadFunctions(pthread_cond_broadcast(&notFullQueueCV), "pthread_cond_broadcast");
+    verifyPthreadFunctions(pthread_cond_signal(&notFullQueueCV), "pthread_cond_broadcast");
     verifyPthreadFunctions(pthread_mutex_unlock(&queueLock), "pthread_mutex_unlock");
 
     // clear buffer
@@ -262,7 +265,7 @@ void *consumer(void *args) {
     int i = 1;
 
     do {
-        sleep(1);
+//        sleep(1);
         incrementMsgsGot();
         status = msgget(queue, buffer, bufferSize);
         if (status == STATUS_FAILURE) {
