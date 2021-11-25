@@ -118,6 +118,14 @@ void nodeDestroy(NodeQ *nodeq) {
     nodeq = NULL;
 }
 
+void freeQueueResources(){
+    verifyFunctionsByErrno(sem_destroy(&fullSlots), "sem_destroy");
+    verifyFunctionsByErrno(sem_destroy(&emptySlots), "sem_destroy");
+
+    verifyPthreadFunctions(pthread_mutex_destroy(&queueLock), "pthread_mutex_destroy");
+    verifyPthreadFunctions(pthread_mutex_destroy(&msgLock), "pthread_mutex_destroy");
+}
+
 void queueDestroy(Queue *queue) {
     NodeQ *current = queue->front;
     while (current) {
@@ -127,6 +135,8 @@ void queueDestroy(Queue *queue) {
     }
     free(queue);
     queue = NULL;
+
+    freeQueueResources();
 }
 
 void initSemaphores(Queue * queue) {
@@ -228,7 +238,6 @@ int msgget(Queue *queue, char *buf, size_t bufsize) {
     verifyPthreadFunctions(pthread_mutex_lock(&queueLock), "pthread_mutex_lock");
 
     if(queue->front->previous == NULL){
-        fprintf(stdout, "Attention, dangerous  situation!\n");
         fflush(stdout);
         queue->rear = NULL;
     }

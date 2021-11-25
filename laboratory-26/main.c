@@ -120,6 +120,16 @@ void nodeDestroy(NodeQ *nodeq) {
     nodeq = NULL;
 }
 
+void freeQueueResources(){
+    verifyPthreadFunctions(pthread_cond_destroy(&notEmptyQueueCV), "pthread_cond_destroy");
+    verifyPthreadFunctions(pthread_cond_destroy(&notFullQueueCV), "pthread_cond_destroy");
+
+    verifyPthreadFunctions(pthread_mutex_destroy(&notEmptyQueueLock), "pthread_mutex_destroy");
+    verifyPthreadFunctions(pthread_mutex_destroy(&notFullQueueLock), "pthread_mutex_destroy");
+    verifyPthreadFunctions(pthread_mutex_destroy(&queueLock), "pthread_mutex_destroy");
+    verifyPthreadFunctions(pthread_mutex_destroy(&msgLock), "pthread_mutex_destroy");
+}
+
 void queueDestroy(Queue *queue) {
     NodeQ *current = queue->front;
     while (current) {
@@ -129,6 +139,8 @@ void queueDestroy(Queue *queue) {
     }
     free(queue);
     queue = NULL;
+
+    freeQueueResources();
 }
 
 int areAllMsgsGot() {
