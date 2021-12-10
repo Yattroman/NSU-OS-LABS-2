@@ -1,7 +1,9 @@
+#include <string.h>
 #include "smartFunctions.h"
 
 void *smartCalloc(size_t num, size_t size) {
     while (NOT_READY) {
+        errno = 0;
         void *ptr = calloc(num, size);
         if (!IS_PTR_EMPTY(ptr)) {
             return ptr;
@@ -16,12 +18,16 @@ void *smartCalloc(size_t num, size_t size) {
 
 int smartOpenFile(char *path, int oflag, mode_t mode) {
     while (NOT_READY) {
+        errno = 0;
         int fd = open(path, oflag, mode);
         if(fd != STATUS_FAILURE){
             return fd;
         }
-        if(errno != EMFILE){
-            fprintf(stderr, "smartOpenFile. There are problems with opening file");
+        if(errno != EMFILE && errno != ENFILE && errno != STATUS_SUCCESS){
+            fprintf(stderr, "smartOpenFile. There are problems with opening file %s\n", path);
+            char errorBuffer[256];
+            strerror_r(errno, errorBuffer, 256);
+            printf("%s\n", errorBuffer);
             return STATUS_FAILURE;
         }
         sleep(RETRY_TIME_SEC);
@@ -30,12 +36,16 @@ int smartOpenFile(char *path, int oflag, mode_t mode) {
 
 DIR *smartOpenDirectory(char *path) {
     while (NOT_READY) {
+        errno = 0;
         DIR *dir = opendir(path);
         if (!IS_PTR_EMPTY(dir)) {
             return dir;
         }
-        if (errno != EMFILE) {
-            fprintf(stderr, "smartOpenDirectory. There are problems with opening directory");
+        if (errno != EMFILE && errno != ENFILE && errno != STATUS_SUCCESS) {
+            fprintf(stderr, "smartOpenDirectory. There are problems with opening directory %s\n", path);
+            char errorBuffer[256];
+            strerror_r(errno, errorBuffer, 256);
+            printf("%s\n", errorBuffer);
             return EMPTY;
         }
         sleep(RETRY_TIME_SEC);
@@ -52,7 +62,7 @@ int smartCreateThread(void *param, void* (*function)(void*)) {
             return STATUS_SUCCESS;
         }
         if (status != EAGAIN) {
-            fprintf(stderr, "Unable to create thread");
+            fprintf(stderr, "smartCreateThread. Create thread isn't possible");
             return STATUS_FAILURE;
         }
         sleep(RETRY_TIME_SEC);

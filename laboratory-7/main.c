@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include "defAssigns.h"
 #include "smartFunctions.h"
 
@@ -32,7 +33,7 @@ char *concatStrings(const char **strings) {
         summaryLength += strlen(strings[i]);
     }
 
-    char *concStr = (char *) smartCalloc(1, summaryLength);
+    char *concStr = (char *) smartCalloc(1, summaryLength + 1);
     if (IS_PTR_EMPTY(concStr)) {
         return EMPTY;
     }
@@ -88,9 +89,11 @@ int copyFileInternals(PathsInfo *paths, int sourceFd, int destinationFd) {
 
     char buf[DEF_BUFF_SIZE];
     while (NOT_READY) {
+        ssize_t offset = 0;
+        ssize_t bytesWritten;
         ssize_t bytesRead = read(sourceFd, buf, DEF_BUFF_SIZE);
         if (bytesRead == STATUS_FAILURE) {
-            perror(paths->source);
+            fprintf(stderr, "copyFileInternals. There are problems with reading file from %s", paths->source);
             return STATUS_FAILURE;
         }
 
@@ -98,12 +101,10 @@ int copyFileInternals(PathsInfo *paths, int sourceFd, int destinationFd) {
             break;
         }
 
-        ssize_t offset = 0;
-        ssize_t bytesWritten;
         while (offset < bytesRead) {
             bytesWritten = write(destinationFd, buf + offset, bytesRead - offset);
             if (bytesWritten == STATUS_FAILURE) {
-                perror(paths->destination);
+                fprintf(stderr, "copyFileInternals. There are problems with reading file from %s", paths->destination);
                 return STATUS_FAILURE;
             }
             offset += bytesWritten;
@@ -152,7 +153,7 @@ int copyDirectory(PathsInfo *paths, mode_t mode) {
         return STATUS_FAILURE;
     }
 
-    if (mkdir(paths->destination, mode) == STATUS_FAILURE && errno != EEXIST) {
+    if (mkdir(paths->destination, mode) == STATUS_FAILURE && errno != EEXIST && errno != STATUS_SUCCESS) {
         fprintf(stderr, "copyDirectory. problems with make directory (mkdir)\n");
         return STATUS_FAILURE;
     }
@@ -200,7 +201,7 @@ int copyRegularFile(PathsInfo *paths, mode_t mode) {
         return STATUS_FAILURE;
     }
 
-    int destinationFd = smartOpenFile(paths->destination, O_WRONLY | O_EXCL | O_CREAT, mode);
+    int destinationFd = smartOpenFile(paths->destination, O_WRONLY | O_CREAT, mode);
     if (destinationFd == STATUS_FAILURE) {
         status = close(sourceFd);
         if (status == STATUS_FAILURE) {
@@ -245,6 +246,8 @@ void *copyFiles(void *args) {
     } else if (S_ISREG(statbuffer.st_mode)) {
         copyRegularFile(paths, statbuffer.st_mode);
     }
+
+    destroyPaths(paths);
 
     return NULL;
 }
