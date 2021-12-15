@@ -121,7 +121,7 @@ int traverseDirectory(DIR *dir, struct dirent *entryBuffer, PathsInfo *paths) {
     }
 
     int status;
-    struct dirent *resDirent;
+    struct dirent *resDirent = NULL;
 
     while (NOT_READY) {
         status = readdir_r(dir, entryBuffer, &resDirent);
