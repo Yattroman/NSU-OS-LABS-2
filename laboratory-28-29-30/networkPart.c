@@ -1,7 +1,7 @@
 #include "networkPart.h"
 #include "defAssigns.h"
 
-int prepareServerAddrInfo(struct addrinfo ** serverinfo, int port, char *host){
+int prepareServerAddrInfo(struct addrinfo **serverinfo, int port, char *host) {
     int status;
     struct addrinfo hints;
 
@@ -13,7 +13,7 @@ int prepareServerAddrInfo(struct addrinfo ** serverinfo, int port, char *host){
     sprintf(portStr, "%d", port);
     status = getaddrinfo(host, portStr, &hints, serverinfo);
 
-    if(status != STATUS_SUCCESS){
+    if (status != STATUS_SUCCESS) {
         fprintf(stderr, "Error! (getaddrinfo): %s\n", gai_strerror(status));
         // Тут должен быть выход!
         return STATUS_FAILURE;
@@ -22,11 +22,13 @@ int prepareServerAddrInfo(struct addrinfo ** serverinfo, int port, char *host){
     return STATUS_SUCCESS;
 }
 
-int prepareGetRequest(char buffer, size_t bufferSize, char* hostname, char* path){
-
+char *prepareGetRequest(char *buffer, size_t bufferSize, char *url) {
+//    char *pattern = "GET /%.*s HTTP/1.0\r\n\r\n";
+//    sprintf(buffer, pattern, bufferSize - strlen(pattern), url); /* dangerous, but we've counted the size before */
+    return "GET / HTTP/1.0\r\n\r\n";
 }
 
-int debugFunction(int socketdescr){
+int debugFunction(int socketdescr) {
     char *message = "GET / HTTP/1.0\r\n\r\n";
     char serverReply[2000];
     if (send(socketdescr, message, strlen(message), 0) < 0) {
@@ -36,40 +38,34 @@ int debugFunction(int socketdescr){
 
     puts("Data Send\n");
 
-    if(recv(socketdescr, serverReply, 2000 , 0) < 0)
-    {
+    if (recv(socketdescr, serverReply, 2000, 0) < 0) {
         puts("recv failed");
     }
     puts("Reply received\n");
     puts(serverReply);
 }
 
-int openSocket(char *host, int port) {
+int openSocket(char *host, int port, struct addrinfo **serverinfo) {
     int status;
     int socketdescr;
-    struct addrinfo * serverinfo;
 
-    status = prepareServerAddrInfo(&serverinfo, port, host);
-    if(status != STATUS_SUCCESS){
+    status = prepareServerAddrInfo(serverinfo, port, host);
+    if (status != STATUS_SUCCESS) {
         // Тут напечатаем ошибку
         return STATUS_FAILURE;
     }
 
-//    status = prepareServerSocketAddr(&server, &serverinfo, port);
-
-    socketdescr = socket(serverinfo->ai_family, serverinfo->ai_socktype, serverinfo->ai_protocol);
-    if(socketdescr == STATUS_FAILURE){
+    socketdescr = socket((*serverinfo)->ai_family, (*serverinfo)->ai_socktype, (*serverinfo)->ai_protocol);
+    if (socketdescr == STATUS_FAILURE) {
         // Тут напечатаем ошибку
         return STATUS_FAILURE;
     }
 
-    status = connect(socketdescr, serverinfo->ai_addr, serverinfo->ai_addrlen);
-    if(status != STATUS_SUCCESS){
+    status = connect(socketdescr, (*serverinfo)->ai_addr, (*serverinfo)->ai_addrlen);
+    if (status != STATUS_SUCCESS) {
         // Тут напечатаем ошибку
         return STATUS_FAILURE;
     }
-
-    freeaddrinfo(serverinfo);
 
     return socketdescr;
 }

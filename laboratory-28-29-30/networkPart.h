@@ -10,7 +10,7 @@
 #include <string.h>
 
 int parseURL();
-int openSocket(char *host, int port);
-int prepareGetRequest(char buffer, size_t bufferSize, char* hostname, char* path);
+int openSocket(char *host, int port, struct addrinfo ** serverinfo);
+char *prepareGetRequest(char *buffer, size_t bufferSize, char *url);
 
 #endif //NSU_OS_LABS_2_NETWORKPART_H

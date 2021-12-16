@@ -114,10 +114,12 @@ int isWorkDone(StatusFl *fl) {
     return (fl->isBuffEmpty && fl->isEOF) ? YES : NO;
 }
 
-int selectClient(char *host, int port) {
+int selectClient(char *url, int port) {
     int status;
     int printedLines = 0;
-    int socket = openSocket(host, port);
+    char getRequestBuffer[MED_BUFFER_SIZE];
+    struct addrinfo * serverinfo;
+    int socket = openSocket(url, port, &serverinfo);
 
     char textBuffer[BIG_BUFFER_SIZE];
 
@@ -130,7 +132,7 @@ int selectClient(char *host, int port) {
     fdInf.sckt = socket;
     BuffInfo buffInfo = {textBuffer, 0, 0};
 
-    char *message = "GET / HTTP/1.1\r\n\r\n";
+    char *message = prepareGetRequest(getRequestBuffer, MED_BUFFER_SIZE, url);
     send(fdInf.sckt, message, strlen(message), 0);
 
     while (TRUE) {
@@ -154,4 +156,6 @@ int selectClient(char *host, int port) {
         }
 
     }
+
+    freeaddrinfo(serverinfo);
 }

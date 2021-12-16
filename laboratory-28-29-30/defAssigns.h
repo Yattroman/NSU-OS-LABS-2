@@ -7,6 +7,7 @@
 #define LITTLE_BUFFER_SIZE 64
 #define VLITTLE_BUFFER_SIZE 8
 #define BIG_BUFFER_SIZE 4096
+#define MED_BUFFER_SIZE 1024
 #define TRUE 1
 #define YES 1
 #define NO 0

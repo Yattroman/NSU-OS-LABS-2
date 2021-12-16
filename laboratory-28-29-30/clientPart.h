@@ -6,8 +6,8 @@
 
 #define MAX_LINES 16
 
-int selectClient(char* host, int port);
-int aioClient(char* host, int port);
-int threadsClient(char* host, int port);
+int selectClient(char* url, int port);
+int aioClient(char* url, int port);
+int threadsClient(char* url, int port);
 
 #endif
