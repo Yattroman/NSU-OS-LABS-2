@@ -1,0 +1,15 @@
+#ifndef NSU_OS_LABS_2_DEFASSIGNS_H
+#define NSU_OS_LABS_2_DEFASSIGNS_H
+
+#define EMPTY NULL
+#define STATUS_FAILURE (-1)
+#define STATUS_SUCCESS 0
+#define LITTLE_BUFFER_SIZE 64
+#define VLITTLE_BUFFER_SIZE 8
+#define BIG_BUFFER_SIZE 4096
+#define TRUE 1
+#define YES 1
+#define NO 0
+#define NO_SYMBOLS 0
+
+#endif
