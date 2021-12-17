@@ -2,8 +2,6 @@
 #include "clientPart.h"
 
 #define NO_DESC_READY 0
-#define STDIN 0
-#define STDOUT 1
 
 // Input Buffer -> buffer which recv data from socket
 // Output Buffer -> buffer which print data on screen
@@ -49,7 +47,7 @@ int handleSockedFD(FDInfo *fdInf, StatusFl *fl, BuffInfo *buffInfo) {
         int isHighBdrBiggerOrEqualThanLow = buffInfo->highBoundary >= buffInfo->lowBoundary;
         size_t availableSpaceToRead = (isHighBdrBiggerOrEqualThanLow) ? BIG_BUFFER_SIZE - buffInfo->highBoundary : buffInfo->lowBoundary - buffInfo->highBoundary;
 
-        int readSymbolsNumber = read(fdInf->sckt, buffInfo->buffer + buffInfo->highBoundary, availableSpaceToRead);
+        size_t readSymbolsNumber = read(fdInf->sckt, buffInfo->buffer + buffInfo->highBoundary, availableSpaceToRead);
         if(readSymbolsNumber == NO_SYMBOLS){
             fl->isEOF = YES;
             return STATUS_SUCCESS;
@@ -84,7 +82,7 @@ int handleStdoutFD(FDInfo *fdInf, StatusFl *fl, int *printedLines, BuffInfo *buf
             ++(*printedLines);
         }
 
-        int writtenSymbolsNumber = write(STDOUT, buffInfo->buffer + buffInfo->lowBoundary, curPos - buffInfo->lowBoundary);
+        size_t writtenSymbolsNumber = write(STDOUT, buffInfo->buffer + buffInfo->lowBoundary, curPos - buffInfo->lowBoundary);
         if(writtenSymbolsNumber == STATUS_FAILURE){
             perror("handleStdoutFD. write error");
         }

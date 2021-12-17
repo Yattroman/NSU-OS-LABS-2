@@ -12,5 +12,7 @@
 #define YES 1
 #define NO 0
 #define NO_SYMBOLS 0
+#define STDIN 0
+#define STDOUT 1
 
 #endif
